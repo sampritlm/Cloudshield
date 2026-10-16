@@ -1,0 +1,222 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  CloudShield — Intelligent Cloud Security Monitoring & Automated Threat Detection
+  Complete AWS Infrastructure (EC2, DynamoDB, EventBridge, Lambda, SQS, SNS, S3, IAM)
+
+Parameters:
+  AlertEmail:
+    Type: String
+    Default: 'security-admin@cloudshield.internal'
+    Description: Email address to receive critical threat detection alerts via Amazon SNS.
+  
+  InstanceType:
+    Type: String
+    Default: 't3.micro'
+    AllowedValues:
+      - 't2.micro'
+      - 't3.micro'
+      - 't3.small'
+    Description: EC2 Instance Type (t2.micro / t3.micro eligible for AWS Free Tier).
+
+Resources:
+  # =========================================================================
+  # 1. Amazon DynamoDB Tables
+  # =========================================================================
+  SecurityEventsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: cloudshield-security-events
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: event_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+      Tags:
+        - Key: Project
+          Value: CloudShield
+
+  SecurityIncidentsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: cloudshield-security-incidents
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: incident_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: incident_id
+          KeyType: HASH
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: false
+      Tags:
+        - Key: Project
+          Value: CloudShield
+
+  # =========================================================================
+  # 2. Amazon EventBridge Custom Bus
+  # =========================================================================
+  CloudShieldEventBus:
+    Type: AWS::Events::EventBus
+    Properties:
+      Name: cloudshield-event-bus
+
+  # =========================================================================
+  # 3. Amazon SQS Priority Incident Queue & DLQ
+  # =========================================================================
+  IncidentDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: cloudshield-incident-dlq
+      MessageRetentionPeriod: 1209600 # 14 days
+
+  IncidentQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: cloudshield-incident-queue
+      VisibilityTimeout: 60
+      MessageRetentionPeriod: 345600 # 4 days
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt IncidentDeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  # =========================================================================
+  # 4. Amazon SNS Alert Topic
+  # =========================================================================
+  AlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: cloudshield-alerts-topic
+      DisplayName: CloudShield Urgent Security Alerts
+
+  AlertEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      TopicArn: !Ref AlertTopic
+      Protocol: email
+      Endpoint: !Ref AlertEmail
+
+  # =========================================================================
+  # 5. Amazon S3 Bucket for Compliance Reports
+  # =========================================================================
+  ReportsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'cloudshield-reports-${AWS::AccountId}-${AWS::Region}'
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+
+  # =========================================================================
+  # 6. IAM Least-Privilege Roles
+  # =========================================================================
+  EC2HostRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: CloudShield-EC2-Host-Role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: CloudShieldAppPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !GetAtt SecurityEventsTable.Arn
+                  - !GetAtt SecurityIncidentsTable.Arn
+              - Effect: Allow
+                Action:
+                  - events:PutEvents
+                Resource: !GetAtt CloudShieldEventBus.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt IncidentQueue.Arn
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: !Ref AlertTopic
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:GetObject
+                Resource: !Sub '${ReportsBucket.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: 'arn:aws:logs:*:*:log-group:/aws/cloudshield/*'
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref EC2HostRole
+
+  # =========================================================================
+  # 7. Amazon VPC & Security Group
+  # =========================================================================
+  AppSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Enable HTTP and CloudShield application ports
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 5173
+          ToPort: 5173
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+
+Outputs:
+  EventBusArn:
+    Description: Amazon EventBridge Custom Bus ARN
+    Value: !GetAtt CloudShieldEventBus.Arn
+
+  IncidentQueueUrl:
+    Description: Amazon SQS Priority Incident Queue URL
+    Value: !Ref IncidentQueue
+
+  AlertTopicArn:
+    Description: Amazon SNS Topic ARN
+    Value: !Ref AlertTopic
+
+  ReportsBucketName:
+    Description: Amazon S3 Compliance Reports Bucket
+    Value: !Ref ReportsBucket
