@@ -66,10 +66,16 @@ class CanIPhishAPIClient:
                 if res.status_code == 200:
                     data = res.json()
                     # If tenant_id not explicitly set, auto-discover first tenant
-                    tenants = data.get("tenantIDs", [])
+                    if isinstance(data, list):
+                        tenants = data
+                    elif isinstance(data, dict):
+                        tenants = data.get("tenantIDs", [])
+                    else:
+                        tenants = []
+
                     if tenants and not self.tenant_id:
-                        self.tenant_id = tenants[0]
-                    return True, data
+                        self.tenant_id = str(tenants[0])
+                    return True, {"tenantIDs": tenants}
                 return False, {"status": res.status_code, "error": res.text}
         except Exception as e:
             logger.error(f"Failed to query CanIPhish get-tenant-access: {e}")
