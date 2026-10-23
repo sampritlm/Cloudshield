@@ -164,6 +164,10 @@ export const api = {
   },
 
   // Reports
+  getLatestReport: async (): Promise<ReportSummary> => {
+    return request<ReportSummary>('/reports/latest');
+  },
+
   generateReport: async (title?: string): Promise<ReportSummary> => {
     return request<ReportSummary>('/reports/generate', {
       method: 'POST',
@@ -204,6 +208,31 @@ export const api = {
     });
   },
 
+  getAlertSubscribers: async (): Promise<any> => {
+    return request('/alerts/subscribers');
+  },
+
+  subscribeEmailToAlerts: async (email: string): Promise<any> => {
+    return request('/alerts/subscribers', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  unsubscribeEmailFromAlerts: async (email: string): Promise<any> => {
+    return request(`/alerts/subscribers/${encodeURIComponent(email)}`, {
+      method: 'DELETE',
+    });
+  },
+
+  sendDirectTestAlert: async (email: string, subject?: string, message?: string): Promise<any> => {
+    return request('/alerts/send-test-to-email', {
+      method: 'POST',
+      body: JSON.stringify({ email, subject, message }),
+    });
+  },
+
+
   // Admin CanIPhish Integration
   getCanIPhishStatus: async (): Promise<any> => {
     return request('/caniphish/status');
@@ -227,8 +256,27 @@ export const api = {
     campaign_name?: string;
     campaign_id?: string;
     source_ip?: string;
+    template_code?: string;
+    phishing_website?: string;
   }): Promise<any> => {
     return request('/caniphish/simulate', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getCanIPhishCatalog: async (): Promise<any> => {
+    return request('/caniphish/catalog');
+  },
+
+  simulateStructuredCanIPhishAttack: async (payload: {
+    target_user: string;
+    template_code: string;
+    phishing_website?: string;
+    action: 'visit' | 'harvest' | 'report';
+    source_ip?: string;
+  }): Promise<any> => {
+    return request('/caniphish/simulate-attack', {
       method: 'POST',
       body: JSON.stringify(payload),
     });

@@ -294,44 +294,71 @@ class CanIPhishSimulateRequest(BaseModel):
     campaign_name: Optional[str] = "CanIPhish - Microsoft 365 Cloud Document Lure"
     campaign_id: Optional[str] = None
     source_ip: Optional[str] = "198.51.100.22"
+    template_code: Optional[str] = None
+    phishing_website: Optional[str] = None
 
 @router.post("/simulate")
 async def simulate_caniphish_event(
     req: CanIPhishSimulateRequest,
-    current_user: UserProfile = Depends(require_analyst_or_admin)
+    current_user: UserProfile = Depends(get_current_user)
 ):
     """
     Simulates authentic CanIPhish phishing campaign outcomes directly from the website.
     Processes payloadClicked, employeeCompromised, emailReported, and deliveryFailed.
     Routes through EventBridge, Lambda risk scoring, DynamoDB, and alerts via SQS/SNS.
     """
+    from app.engine.rules import CANIPHISH_EMAIL_TEMPLATES, CANIPHISH_PHISHING_WEBSITES
+
+    tmpl = CANIPHISH_EMAIL_TEMPLATES.get(req.template_code) if req.template_code else None
+    if not tmpl and req.campaign_name:
+        for code, t in CANIPHISH_EMAIL_TEMPLATES.items():
+            if code.lower() in req.campaign_name.lower():
+                tmpl = t
+                break
+
+    site_code = req.phishing_website or (tmpl.get("paired_website") if tmpl else "Google-Login")
+    site = CANIPHISH_PHISHING_WEBSITES.get(site_code) or CANIPHISH_PHISHING_WEBSITES.get("Google-Login")
+
     action_map = {
-        "payloadClicked": "simulated_phishing_link_clicked",
-        "employeeCompromised": "simulated_employee_credential_compromise",
-        "emailReported": "simulated_phishing_email_reported",
+        "emailOpened": f"simulated_phishing_email_opened ({tmpl['template_code'] if tmpl else 'lure'})",
+        "payloadClicked": f"simulated_phishing_link_clicked ({tmpl['template_code'] if tmpl else 'lure'} -> {site['site_code']})",
+        "employeeCompromised": f"simulated_credential_compromise on {site['title']} ({site['domain']})",
+        "emailReported": f"simulated_phishing_email_reported ({tmpl['template_code'] if tmpl else 'lure'})",
         "deliveryFailed": "simulated_phishing_delivery_failed",
     }
     action = action_map.get(req.event_type, f"caniphish_{req.event_type}")
-    camp_id = req.campaign_id or f"CP-CAMP-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M')}"
+    camp_id = req.campaign_id or f"CP-{tmpl['template_code'][:8].upper() if tmpl else 'CAMP'}-{datetime.now(timezone.utc).strftime('%H%M%S')}"
 
     raw_payload: Dict[str, Any] = {
         "eventName": req.event_type,
         "employeeEmail": req.target_user,
-        "campaignName": req.campaign_name,
+        "campaignName": req.campaign_name or (f"CanIPhish: {tmpl['template_code']}" if tmpl else "Phishing Simulation"),
         "campaignGUID": camp_id,
         "ipAddress": req.source_ip,
+        "template_code": tmpl["template_code"] if tmpl else req.template_code,
+        "template_title": tmpl["title"] if tmpl else None,
+        "difficulty": tmpl.get("difficulty") if tmpl else "Hard",
+        "compromise_rate": tmpl.get("compromise_rate") if tmpl else "30%",
+        "phishing_website": site["site_code"],
+        "phishing_website_title": site["title"],
+        "deceptive_domain": site.get("domain", "alerting-services.com"),
+        "landing_page": site.get("landing_url"),
         "simulated": True,
         "source": "CanIPhish Interactive Console"
     }
 
-    if req.event_type == "payloadClicked":
-        raw_payload["clicked_link"] = "https://m365-auth-login.xyz/verify-account"
+    if req.event_type == "emailOpened":
+        raw_payload["emailOpened"] = True
+    elif req.event_type == "payloadClicked":
+        raw_payload["clicked_link"] = site.get("landing_url", f"https://{site['site_code'].lower()}.alerting-services.com")
         raw_payload["payloadInteraction"] = True
     elif req.event_type == "employeeCompromised":
-        raw_payload["landing_page"] = "https://m365-auth-login.xyz/login"
-        raw_payload["employeeCompromised"] = True  # Safe simulation, no real credentials collected
+        raw_payload["landing_page"] = site.get("landing_url")
+        raw_payload["employeeCompromised"] = True
+        raw_payload["harvested_credentials"] = ["email", "password"]
+        raw_payload["credentialType"] = "Password Authentication"
     elif req.event_type == "emailReported":
-        raw_payload["reported_via"] = "CloudShield Outlook Security Plugin"
+        raw_payload["reported_via"] = "CloudShield Threat Inbox / Outlook Security Plugin"
         raw_payload["emailReported"] = True
     elif req.event_type == "deliveryFailed":
         raw_payload["bounce_reason"] = "550 5.1.1 User unknown / Mailbox unavailable"
@@ -340,13 +367,13 @@ async def simulate_caniphish_event(
     event_in = SecurityEventCreate(
         event_type=req.event_type,
         test_user=req.target_user or "user@cloudshield.internal",
-        source_ip=req.source_ip or "198.51.100.22",
-        resource=f"caniphish://campaign/{camp_id}",
+        source_ip=req.source_ip or "185.220.101.5",
+        resource=site.get("landing_url") or f"https://{site['domain']}/login/{site['site_code']}",
         action=action,
         source_platform=SourcePlatform.CANIPHISH,
         source_event_id=f"cp-sim-{datetime.now(timezone.utc).timestamp()}",
         campaign_id=camp_id,
-        campaign_name=req.campaign_name,
+        campaign_name=raw_payload["campaignName"],
         request_count=1,
         raw_payload=raw_payload
     )
@@ -383,3 +410,118 @@ async def get_caniphish_simulation_results(
 
     caniphish_events.sort(key=lambda x: x.timestamp, reverse=True)
     return caniphish_events
+
+class CanIPhishAttackSimulationRequest(BaseModel):
+    target_user: str
+    template_code: str
+    phishing_website: Optional[str] = None
+    action: str = "harvest"  # visit | harvest | report
+    source_ip: Optional[str] = "185.220.101.5"
+
+@router.get("/catalog")
+async def get_caniphish_catalog(current_user: UserProfile = Depends(get_current_user)):
+    """
+    Returns the official CanIPhish catalog containing:
+    1. 5 Phishing Email Templates (Gmail-Blocked-Login, OneDrive-Word-Share, Microsoft-Security-Alert, HR-Device-Violation, Linkedin-Password-Reset)
+    2. 3 Phishing Websites masquerading as Google, Microsoft, and LinkedIn portals (alerting-services.com)
+    """
+    from app.engine.rules import CANIPHISH_EMAIL_TEMPLATES, CANIPHISH_PHISHING_WEBSITES
+    return {
+        "email_templates": list(CANIPHISH_EMAIL_TEMPLATES.values()),
+        "phishing_websites": list(CANIPHISH_PHISHING_WEBSITES.values()),
+        "domain": "alerting-services.com",
+        "global_delivery_enabled": True
+    }
+
+@router.post("/simulate-attack")
+async def simulate_caniphish_attack(
+    req: CanIPhishAttackSimulationRequest,
+    current_user: UserProfile = Depends(get_current_user)
+):
+    """
+    Executes a structured CanIPhish attack simulation correlating an Email Template
+    and a Phishing Website (Google-Login, Microsoft-Login, or LinkedIn-Login).
+    Routes through EventBridge, Lambda risk analysis, DynamoDB, SQS, and SNS.
+    """
+    from app.engine.rules import CANIPHISH_EMAIL_TEMPLATES, CANIPHISH_PHISHING_WEBSITES
+
+    tmpl = CANIPHISH_EMAIL_TEMPLATES.get(req.template_code) or {
+        "template_code": req.template_code,
+        "title": req.template_code,
+        "paired_website": "Google-Login",
+        "difficulty": "Hard",
+        "compromise_rate": "30%"
+    }
+
+    site_code = req.phishing_website or tmpl.get("paired_website", "Google-Login")
+    site = CANIPHISH_PHISHING_WEBSITES.get(site_code) or {
+        "site_code": site_code,
+        "title": site_code,
+        "domain": "alerting-services.com"
+    }
+
+    if req.action == "visit":
+        event_type = "payloadClicked"
+        act_desc = f"Visited {site['title']} via {tmpl['template_code']}"
+    elif req.action == "report":
+        event_type = "emailReported"
+        act_desc = f"Reported {tmpl['template_code']} phishing email to SOC"
+    else:
+        event_type = "employeeCompromised"
+        act_desc = f"Credential harvest on {site['title']} ({site['domain']})"
+
+    camp_id = f"CP-{req.template_code[:8].upper()}-{datetime.now(timezone.utc).strftime('%H%M%S')}"
+
+    raw_payload = {
+        "template_code": tmpl["template_code"],
+        "template_title": tmpl.get("title"),
+        "difficulty": tmpl.get("difficulty"),
+        "compromise_rate": tmpl.get("compromise_rate"),
+        "phishing_website": site["site_code"],
+        "phishing_website_title": site["title"],
+        "deceptive_domain": site.get("domain", "alerting-services.com"),
+        "landing_page": site.get("landing_url"),
+        "action": req.action,
+        "employeeEmail": req.target_user,
+        "source": "CanIPhish Attack Simulator"
+    }
+
+    if req.action == "harvest":
+        raw_payload["employeeCompromised"] = True
+        raw_payload["credentialType"] = "Password Authentication"
+    elif req.action == "visit":
+        raw_payload["payloadInteraction"] = True
+    elif req.action == "report":
+        raw_payload["emailReported"] = True
+
+    event_in = SecurityEventCreate(
+        event_type=event_type,
+        test_user=req.target_user,
+        source_ip=req.source_ip or "185.220.101.5",
+        resource=f"https://{site.get('domain', 'alerting-services.com')}/login/{site['site_code']}",
+        action=act_desc,
+        source_platform=SourcePlatform.CANIPHISH,
+        source_event_id=f"cp-atk-{datetime.now(timezone.utc).timestamp()}",
+        campaign_id=camp_id,
+        campaign_name=f"CanIPhish: {tmpl['template_code']} / {site['site_code']}",
+        request_count=1,
+        raw_payload=raw_payload
+    )
+
+    ingested = process_and_ingest_event(event_in, actor="CanIPhish Structured Attack Simulator")
+
+    return {
+        "status": "SUCCESS",
+        "event_id": ingested.event_id,
+        "template": tmpl,
+        "phishing_website": site,
+        "target_user": req.target_user,
+        "action": req.action,
+        "risk_score": ingested.risk_score,
+        "severity": ingested.severity.value,
+        "incident_id": ingested.incident_id,
+        "triggered_rules": ingested.triggered_rules,
+        "reasons": ingested.detection_reasons,
+        "notified_via_sns": ingested.risk_score > 60
+    }
+

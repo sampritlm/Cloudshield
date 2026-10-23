@@ -15,6 +15,7 @@ import { Reports } from './pages/Reports';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminSettings } from './pages/admin/AdminSettings';
 import { ThreatSimulator } from './pages/ThreatSimulator';
+import { ThreatInbox } from './pages/ThreatInbox';
 
 // Normal User Pages
 import { UserDashboard } from './pages/user/UserDashboard';
@@ -30,8 +31,9 @@ const MainLayout: React.FC = () => {
 
   // Default tab based on role
   const [currentTab, setCurrentTab] = useState<NavTab>('overview');
+  const [awsMode, setAwsMode] = useState<boolean>(false);
 
-  // Synchronize default tab on user login or role change
+  // Synchronize default tab on user login or role change and check AWS mode
   useEffect(() => {
     if (user) {
       if (user.role === 'admin') {
@@ -41,6 +43,12 @@ const MainLayout: React.FC = () => {
         setIsUserViewMode(true);
         setCurrentTab('user-dashboard');
       }
+      // Check backend AWS mode
+      import('./services/api').then(({ api }) => {
+        api.getSystemHealth().then((health) => {
+          setAwsMode(health.aws_mode);
+        }).catch(() => {});
+      });
     }
   }, [user?.role]);
 
@@ -74,6 +82,7 @@ const MainLayout: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <Navbar
+        awsMode={awsMode}
         isUserViewMode={isUserViewMode}
         onToggleUserViewMode={isAdmin ? handleToggleUserViewMode : undefined}
       />
@@ -89,6 +98,7 @@ const MainLayout: React.FC = () => {
           {currentTab === 'overview' && <Dashboard onNavigateTab={setCurrentTab as any} />}
           {currentTab === 'events' && <SecurityEvents />}
           {currentTab === 'incidents' && <IncidentManagement />}
+          {currentTab === 'threat-inbox' && <ThreatInbox />}
           {currentTab === 'caniphish' && <AdminCanIPhish />}
           {currentTab === 'alerts' && <AdminAlerts />}
           {currentTab === 'system' && <SystemMonitoring />}
@@ -106,6 +116,7 @@ const MainLayout: React.FC = () => {
           {currentTab === 'user-dashboard' && (
             <UserDashboard onNavigateTab={(tab) => setCurrentTab(`user-${tab}` as NavTab)} />
           )}
+          {currentTab === 'user-mailbox' && <ThreatInbox />}
           {currentTab === 'user-simulations' && <UserSimulations />}
           {currentTab === 'user-insights' && <UserInsights />}
           {currentTab === 'user-learning' && <UserLearning />}

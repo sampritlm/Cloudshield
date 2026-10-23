@@ -23,6 +23,7 @@ export type NavTab =
   | 'overview'
   | 'events'
   | 'incidents'
+  | 'threat-inbox'
   | 'caniphish'
   | 'alerts'
   | 'system'
@@ -32,6 +33,7 @@ export type NavTab =
   | 'simulator'
   // Normal user tabs
   | 'user-dashboard'
+  | 'user-mailbox'
   | 'user-simulations'
   | 'user-insights'
   | 'user-learning'
@@ -77,6 +79,13 @@ export const Sidebar: React.FC<Props> = ({
       label: 'Incident Management',
       icon: AlertTriangle,
       badge: openIncidentsCount > 0 ? `${openIncidentsCount} Open` : 'SQS',
+      badgeColor: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
+    },
+    {
+      id: 'threat-inbox' as NavTab,
+      label: 'Gmail Threat Client',
+      icon: Mail,
+      badge: 'Live Lures',
       badgeColor: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
     },
     {
@@ -135,6 +144,13 @@ export const Sidebar: React.FC<Props> = ({
       label: 'My Dashboard',
       icon: LayoutDashboard,
       badge: null,
+    },
+    {
+      id: 'user-mailbox' as NavTab,
+      label: 'My Gmail Inbox',
+      icon: Mail,
+      badge: 'Interactive',
+      badgeColor: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
     },
     {
       id: 'user-simulations' as NavTab,

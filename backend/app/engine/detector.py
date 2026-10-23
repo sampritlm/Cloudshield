@@ -15,12 +15,16 @@ from app.engine.rules import (
     RULE_UNAUTHORIZED_ACCESS,
     RULE_HIGH_REQUEST_FREQUENCY,
     RULE_COMBINED_ACTIVITY,
+    RULE_CANIPHISH_EMAIL_OPENED,
     RULE_CANIPHISH_PAYLOAD_CLICKED,
+    RULE_CANIPHISH_WEBSITE_VISITED,
     RULE_CANIPHISH_EMPLOYEE_COMPROMISED,
     RULE_CANIPHISH_MULTI_INTERACTION,
     RULE_CANIPHISH_EMAIL_REPORTED,
     RULE_CANIPHISH_DELIVERY_FAILED,
-    RULE_METADATA
+    RULE_METADATA,
+    CANIPHISH_EMAIL_TEMPLATES,
+    CANIPHISH_PHISHING_WEBSITES
 )
 
 def classify_severity(score: int) -> SeverityLevel:
@@ -66,24 +70,113 @@ class ThreatDetectionEngine:
             event_type_lower = event.event_type.lower()
             raw = event.raw_payload or {}
 
-            is_clicked = (
-                "click" in event_type_lower
-                or event.event_type == "payloadClicked"
-                or raw.get("payloadInteraction") is True
-                or raw.get("payloadInteractionTime") is not None
+            # -----------------------------------------------------------------
+            # 1. Match Email Threat Template (Catalog of 5 Official Templates)
+            # -----------------------------------------------------------------
+            matched_template = None
+            req_template = (
+                raw.get("template_code")
+                or raw.get("template")
+                or raw.get("templateName")
+                or raw.get("emailTemplate")
+                or event.campaign_name
+                or ""
             )
+            for code, tmpl in CANIPHISH_EMAIL_TEMPLATES.items():
+                if (
+                    code.lower() in req_template.lower()
+                    or code.lower() in event.action.lower()
+                    or tmpl["title"].lower() in req_template.lower()
+                    or tmpl["subject"].lower() in str(raw.get("subject", "")).lower()
+                ):
+                    matched_template = tmpl
+                    break
 
-            is_compromised = (
-                "compromise" in event_type_lower
-                or event.event_type == "employeeCompromised"
-                or raw.get("employeeCompromised") is True
-                or raw.get("employeeCompromisedTime") is not None
+            # -----------------------------------------------------------------
+            # 2. Match Phishing Website (3 Official Portals on alerting-services.com)
+            # -----------------------------------------------------------------
+            matched_website = None
+            req_site = (
+                raw.get("phishing_website")
+                or raw.get("website")
+                or raw.get("site_code")
+                or raw.get("landing_page")
+                or event.resource
+                or ""
             )
+            for code, site in CANIPHISH_PHISHING_WEBSITES.items():
+                if (
+                    code.lower() in req_site.lower()
+                    or site["title"].lower() in req_site.lower()
+                    or site["landing_url"].lower() in req_site.lower()
+                    or code.lower() in event.action.lower()
+                ):
+                    matched_website = site
+                    break
 
+            # Auto-correlate: If template matched but website not given, use paired website
+            if not matched_website and matched_template and matched_template.get("paired_website"):
+                paired_code = matched_template["paired_website"]
+                matched_website = CANIPHISH_PHISHING_WEBSITES.get(paired_code)
+
+            # Auto-correlate: If website matched but template not given, find primary template
+            if not matched_template and matched_website:
+                for tmpl in CANIPHISH_EMAIL_TEMPLATES.values():
+                    if tmpl.get("paired_website") == matched_website["site_code"]:
+                        matched_template = tmpl
+                        break
+
+            # -----------------------------------------------------------------
+            # 3. Detect Action Types across Email Threats & Phishing Websites
+            # -----------------------------------------------------------------
             is_reported = (
                 "report" in event_type_lower
                 or event.event_type == "emailReported"
                 or raw.get("emailReported") is True
+                or raw.get("action") == "report"
+            )
+
+            is_compromised = (
+                "compromise" in event_type_lower
+                or "harvest" in event_type_lower
+                or event.event_type in ["employeeCompromised", "credentialCompromised"]
+                or raw.get("employeeCompromised") is True
+                or raw.get("employeeCompromisedTime") is not None
+                or raw.get("action") == "harvest"
+            )
+
+            is_clicked = (
+                (
+                    "click" in event_type_lower
+                    or event.event_type in ["payloadClicked", "linkClicked"]
+                    or raw.get("payloadInteraction") is True
+                    or raw.get("payloadInteractionTime") is not None
+                    or is_compromised
+                )
+                and not is_reported
+            )
+
+            is_site_visited = (
+                (
+                    ("visit" in event_type_lower and "email" not in event_type_lower)
+                    or event.event_type in ["websiteVisited", "landingPageViewed", "siteVisited"]
+                    or raw.get("action") == "visit"
+                )
+                and not is_reported
+                and not is_clicked
+            )
+
+            is_opened = (
+                (
+                    "open" in event_type_lower
+                    or event.event_type == "emailOpened"
+                    or raw.get("emailOpened") is True
+                    or raw.get("emailOpenedTime") is not None
+                )
+                and not is_clicked
+                and not is_site_visited
+                and not is_compromised
+                and not is_reported
             )
 
             is_delivery_failed = (
@@ -92,80 +185,160 @@ class ThreatDetectionEngine:
                 or raw.get("deliveryFailed") is True
             )
 
-            # 1. Payload Click (+30 pts)
+            # Metadata helpers
+            site_name = matched_website["title"] if matched_website else "Deceptive Identity Portal"
+            site_code = matched_website["site_code"] if matched_website else "alerting-services.com"
+            site_url = matched_website["landing_url"] if matched_website else f"https://{site_code.lower()}.alerting-services.com"
+            tmpl_code = matched_template["template_code"] if matched_template else "Generic-Phish-Lure"
+            tmpl_title = matched_template["title"] if matched_template else tmpl_code
+
+            # -----------------------------------------------------------------
+            # Rule Evaluation: Email Threat Interactions
+            # -----------------------------------------------------------------
+            # A. Email Opened (+15 pts)
+            if is_opened and not is_clicked and not is_compromised:
+                rules_triggered.append(
+                    RuleTriggerResult(
+                        rule_name=RULE_METADATA[RULE_CANIPHISH_EMAIL_OPENED]["title"],
+                        rule_code=RULE_CANIPHISH_EMAIL_OPENED,
+                        description=f"CanIPhish: Recipient '{event.test_user}' opened email lure '{tmpl_title}' ({tmpl_code}).",
+                        points=15,
+                        details={
+                            "campaign_id": event.campaign_id,
+                            "template_code": tmpl_code,
+                            "template_title": tmpl_title,
+                            "difficulty": matched_template["difficulty"] if matched_template else "Hard",
+                            "action": "email_opened"
+                        }
+                    )
+                )
+                reasons.append(
+                    f"Phishing Email Opened: Recipient '{event.test_user}' opened '{tmpl_title}' ({tmpl_code})."
+                )
+
+            # B. Phishing Link Clicked / Payload Interaction (+35 pts)
             if is_clicked:
                 rules_triggered.append(
                     RuleTriggerResult(
                         rule_name=RULE_METADATA[RULE_CANIPHISH_PAYLOAD_CLICKED]["title"],
                         rule_code=RULE_CANIPHISH_PAYLOAD_CLICKED,
-                        description=f"CanIPhish: Test user '{event.test_user}' clicked phishing payload link.",
+                        description=f"CanIPhish: Test user '{event.test_user}' clicked lure link in '{tmpl_code}' targeting {site_name}.",
                         points=self.cfg.POINTS_PAYLOAD_CLICKED,
-                        details={"campaign_id": event.campaign_id, "action": event.action}
+                        details={
+                            "campaign_id": event.campaign_id,
+                            "template_code": tmpl_code,
+                            "template_title": tmpl_title,
+                            "phishing_website": site_code,
+                            "deceptive_domain": matched_website["domain"] if matched_website else "alerting-services.com",
+                            "landing_url": site_url,
+                            "action": "payload_clicked"
+                        }
                     )
                 )
                 reasons.append(
-                    f"CanIPhish Phishing Click: Recipient '{event.test_user}' interacted with phishing link/attachment."
+                    f"CanIPhish Phishing Link Click: Recipient '{event.test_user}' interacted with '{tmpl_code}' targeting {site_name}."
                 )
 
-            # 2. Employee Compromised (+50 pts)
+            # C. Phishing Website Direct Access / Portal Navigation (+35 pts)
+            if is_site_visited and not is_clicked:
+                rules_triggered.append(
+                    RuleTriggerResult(
+                        rule_name=RULE_METADATA[RULE_CANIPHISH_WEBSITE_VISITED]["title"],
+                        rule_code=RULE_CANIPHISH_WEBSITE_VISITED,
+                        description=f"CanIPhish: Navigated to deceptive phishing website {site_name} on alerting-services.com.",
+                        points=35,
+                        details={
+                            "campaign_id": event.campaign_id,
+                            "phishing_website": site_code,
+                            "deceptive_domain": "alerting-services.com",
+                            "landing_url": site_url,
+                            "origin_template": tmpl_code
+                        }
+                    )
+                )
+                reasons.append(
+                    f"Deceptive Phishing Website Accessed: User visited {site_name} ({site_code}) at alerting-services.com."
+                )
+
+            # D. Credential Compromise / Account Takeover Risk (+55 pts + Multi-Interaction Bonus)
             if is_compromised:
                 rules_triggered.append(
                     RuleTriggerResult(
                         rule_name=RULE_METADATA[RULE_CANIPHISH_EMPLOYEE_COMPROMISED]["title"],
                         rule_code=RULE_CANIPHISH_EMPLOYEE_COMPROMISED,
-                        description=f"CanIPhish: Test user '{event.test_user}' entered credentials or fell for simulated compromise.",
+                        description=f"CanIPhish: Recipient '{event.test_user}' entered credentials on {site_name} (Lure: {tmpl_code}).",
                         points=self.cfg.POINTS_EMPLOYEE_COMPROMISED,
-                        details={"campaign_id": event.campaign_id, "action": event.action}
+                        details={
+                            "campaign_id": event.campaign_id,
+                            "template_code": tmpl_code,
+                            "template_title": tmpl_title,
+                            "difficulty": matched_template["difficulty"] if matched_template else "Hard",
+                            "compromise_rate": matched_template["compromise_rate"] if matched_template else "30%",
+                            "phishing_website": site_code,
+                            "phishing_website_title": site_name,
+                            "deceptive_domain": "alerting-services.com",
+                            "landing_url": site_url,
+                            "harvested_fields": ["email", "password"],
+                            "credential_harvest_successful": True,
+                            "action": "credentials_compromised"
+                        }
                     )
                 )
                 reasons.append(
-                    f"CanIPhish Credential Compromise: Recipient '{event.test_user}' compromised credentials in simulated attack."
+                    f"CRITICAL Phishing Compromise: Recipient '{event.test_user}' submitted credentials on {site_name} ({site_code})."
                 )
 
-            # 3. Correlated Multiple Interactions (+20 pts)
-            if (is_clicked and is_compromised) or (len(recent_user_events) > 0 and (is_clicked or is_compromised)):
+                # Add Multi-Interaction Correlation Escalation
                 rules_triggered.append(
                     RuleTriggerResult(
                         rule_name=RULE_METADATA[RULE_CANIPHISH_MULTI_INTERACTION]["title"],
                         rule_code=RULE_CANIPHISH_MULTI_INTERACTION,
-                        description=f"CanIPhish: Multiple correlated phishing interactions within same campaign session.",
+                        description=f"CanIPhish: Correlated email click + credential submission on {site_name}.",
                         points=self.cfg.POINTS_COMBINED_INTERACTION_BONUS,
-                        details={"interactions": 2}
+                        details={
+                            "interactions": ["payload_clicked", "credential_harvested"],
+                            "risk_escalation": "CRITICAL"
+                        }
                     )
                 )
                 reasons.append(
-                    f"CanIPhish Multi-Interaction Bonus: Correlated click + compromise signals escalated risk (+{self.cfg.POINTS_COMBINED_INTERACTION_BONUS} pts)."
+                    f"Correlated Multi-Interaction Escalation: Email link click followed by credential submission (+{self.cfg.POINTS_COMBINED_INTERACTION_BONUS} pts)."
                 )
 
-            # 4. Email Reported (Positive Defense, 0 pts)
+            # E. Positive Defense / Proactive Phishing Email Reported (0 pts, SOC Alert)
             if is_reported:
                 rules_triggered.append(
                     RuleTriggerResult(
                         rule_name=RULE_METADATA[RULE_CANIPHISH_EMAIL_REPORTED]["title"],
                         rule_code=RULE_CANIPHISH_EMAIL_REPORTED,
-                        description=f"CanIPhish: Recipient '{event.test_user}' proactively reported the simulated phishing email.",
+                        description=f"CanIPhish: Recipient '{event.test_user}' proactively identified and reported '{tmpl_title}' to SOC.",
                         points=0,
-                        details={"status": "REPORTED_BENIGN"}
+                        details={
+                            "template_code": tmpl_code,
+                            "template_title": tmpl_title,
+                            "defense_status": "PROACTIVE_DEFENSE_REWARD",
+                            "action": "email_reported"
+                        }
                     )
                 )
                 reasons.append(
-                    f"CanIPhish Positive Action: Recipient '{event.test_user}' successfully identified and reported the email."
+                    f"CanIPhish Positive Action: Recipient '{event.test_user}' proactively reported '{tmpl_title}' to SOC."
                 )
 
-            # 5. Delivery Failed (0 pts)
+            # F. Phishing Simulation Delivery Failure (0 pts)
             if is_delivery_failed:
                 rules_triggered.append(
                     RuleTriggerResult(
                         rule_name=RULE_METADATA[RULE_CANIPHISH_DELIVERY_FAILED]["title"],
                         rule_code=RULE_CANIPHISH_DELIVERY_FAILED,
-                        description=f"CanIPhish: Phishing email delivery failed.",
+                        description=f"CanIPhish: Simulation delivery failed for '{tmpl_code}'.",
                         points=0,
-                        details={"delivery": "FAILED"}
+                        details={"delivery": "FAILED", "template_code": tmpl_code}
                     )
                 )
-                reasons.append("CanIPhish Notice: Delivery failed to destination mail server.")
+                reasons.append(f"CanIPhish Delivery Notice: Phishing simulation email delivery failed for '{tmpl_code}'.")
 
-            # Calculate and Cap
+            # Calculate and Cap Score
             raw_score = sum(r.points for r in rules_triggered)
             capped_score = min(100, max(0, raw_score))
             severity = classify_severity(capped_score)

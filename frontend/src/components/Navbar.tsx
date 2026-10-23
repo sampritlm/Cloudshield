@@ -55,11 +55,15 @@ export const Navbar: React.FC<Props> = ({
         )}
 
         {/* Environment Mode Pill */}
-        <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium border bg-slate-50 border-slate-200 text-slate-700">
+        <div className={`hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium border ${
+          awsMode
+            ? 'bg-amber-50 border-amber-300 text-amber-900 shadow-xs'
+            : 'bg-slate-50 border-slate-200 text-slate-700'
+        }`}>
           {awsMode ? (
             <>
-              <Cloud className="w-3.5 h-3.5 text-amber-500" />
-              <span>AWS Mode (EC2/DynamoDB)</span>
+              <Cloud className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+              <span className="font-semibold text-amber-800">AWS Mode (ap-south-1 • DynamoDB)</span>
             </>
           ) : (
             <>

@@ -27,6 +27,21 @@ export const Reports: React.FC = () => {
   // CloudTrail state
   const [cloudTrailLogs, setCloudTrailLogs] = useState<any[]>([]);
   const [isLoadingTrail, setIsLoadingTrail] = useState<boolean>(false);
+  const [isLiveActive, setIsLiveActive] = useState<boolean>(true);
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+
+  const loadReport = async (silent: boolean = false) => {
+    if (!silent) setIsGenerating(true);
+    try {
+      const data = await api.getLatestReport();
+      setReport(data);
+      setLastSyncTime(new Date());
+    } catch (err: any) {
+      if (!silent) setErrorMsg(err.message || 'Report fetch failed');
+    } finally {
+      if (!silent) setIsGenerating(false);
+    }
+  };
 
   const handleGenerate = async () => {
     setIsGenerating(true);
@@ -34,6 +49,7 @@ export const Reports: React.FC = () => {
     try {
       const data = await api.generateReport('CloudShield Comprehensive Security Audit Report');
       setReport(data);
+      setLastSyncTime(new Date());
     } catch (err: any) {
       setErrorMsg(err.message || 'Report generation failed');
     } finally {
@@ -49,23 +65,40 @@ export const Reports: React.FC = () => {
     window.print();
   };
 
-  const fetchCloudTrail = async () => {
-    setIsLoadingTrail(true);
+  const fetchCloudTrail = async (silent: boolean = false) => {
+    if (!silent) setIsLoadingTrail(true);
     try {
       const logs = await api.getCloudTrailLogs();
       setCloudTrailLogs(logs || []);
     } catch (err) {
       console.error(err);
     } finally {
-      setIsLoadingTrail(false);
+      if (!silent) setIsLoadingTrail(false);
     }
   };
 
   useEffect(() => {
+    loadReport(false);
+  }, []);
+
+  useEffect(() => {
     if (activeTab === 'cloudtrail') {
-      fetchCloudTrail();
+      fetchCloudTrail(false);
     }
   }, [activeTab]);
+
+  // Real-time synchronization interval
+  useEffect(() => {
+    if (!isLiveActive) return;
+    const interval = setInterval(() => {
+      if (activeTab === 'reports') {
+        loadReport(true);
+      } else if (activeTab === 'cloudtrail') {
+        fetchCloudTrail(true);
+      }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [isLiveActive, activeTab]);
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto print:p-0 print:m-0">
@@ -83,9 +116,28 @@ export const Reports: React.FC = () => {
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Real-time streaming status pill */}
+          <button
+            onClick={() => setIsLiveActive(!isLiveActive)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              isLiveActive
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-xs hover:bg-emerald-100'
+                : 'bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200'
+            }`}
+            title={isLiveActive ? "Auto-syncing every 3s with active telemetry and S3" : "Click to resume live sync"}
+          >
+            <span className="relative flex h-2 w-2">
+              {isLiveActive && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              )}
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${isLiveActive ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+            </span>
+            <span className="font-mono tracking-tight">{isLiveActive ? 'REAL-TIME (3s)' : 'PAUSED'}</span>
+          </button>
+
           {/* Sub tabs */}
-          <div className="flex p-1 bg-slate-100 rounded-lg text-xs font-semibold mr-2">
+          <div className="flex p-1 bg-slate-100 rounded-lg text-xs font-semibold mr-1">
             <button
               onClick={() => setActiveTab('reports')}
               className={`px-3 py-1.5 rounded-md transition-all ${
@@ -136,12 +188,12 @@ export const Reports: React.FC = () => {
 
           {activeTab === 'cloudtrail' && (
             <button
-              onClick={fetchCloudTrail}
+              onClick={() => fetchCloudTrail(false)}
               disabled={isLoadingTrail}
               className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg shadow-sm transition-colors"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isLoadingTrail ? 'animate-spin' : ''}`} />
-              <span>Refresh CloudTrail</span>
+              <span>Sync CloudTrail</span>
             </button>
           )}
         </div>

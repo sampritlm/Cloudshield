@@ -69,7 +69,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab }) => {
   const [selectedEvent, setSelectedEvent] = useState<SecurityEvent | null>(null);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
 
-  const fetchDashboardData = async () => {
+  const [isLiveActive, setIsLiveActive] = useState<boolean>(true);
+  const [lastSyncTime, setLastSyncTime] = useState<Date>(new Date());
+
+  const fetchDashboardData = async (isBackground: boolean = false) => {
+    if (!isBackground) {
+      // only show spinner on explicit user refresh if initial load already done
+    }
     try {
       const [sumData, tsData, rData, tData, evData, incData, cData, aData, hData] = await Promise.allSettled([
         api.getDashboardSummary(),
@@ -92,6 +98,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab }) => {
       if (cData.status === 'fulfilled') setCaniphishStatus(cData.value);
       if (aData.status === 'fulfilled') setRecentAlerts(aData.value || []);
       if (hData.status === 'fulfilled') setSystemServices(hData.value?.services || []);
+      setLastSyncTime(new Date());
     } catch (err) {
       console.error('Failed to load dashboard data:', err);
     } finally {
@@ -101,17 +108,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab }) => {
   };
 
   useEffect(() => {
-    fetchDashboardData();
+    fetchDashboardData(false);
   }, []);
+
+  // Real-time telemetry continuous polling
+  useEffect(() => {
+    if (!isLiveActive) return;
+    const interval = setInterval(() => {
+      fetchDashboardData(true);
+    }, 2500);
+    return () => clearInterval(interval);
+  }, [isLiveActive]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    fetchDashboardData();
+    fetchDashboardData(false);
   };
 
   const handleStatusUpdate = async (incidentId: string, newStatus: any, note?: string) => {
     await api.updateIncidentStatus(incidentId, newStatus, note);
-    fetchDashboardData();
+    fetchDashboardData(true);
   };
 
   if (isLoading) {
@@ -152,13 +168,32 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab }) => {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Live Sync Status Pill */}
+          <button
+            onClick={() => setIsLiveActive(!isLiveActive)}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
+              isLiveActive
+                ? 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-xs hover:bg-emerald-100'
+                : 'bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200'
+            }`}
+            title={isLiveActive ? "Auto-syncing every 2.5s directly with AWS DynamoDB" : "Click to resume live sync"}
+          >
+            <span className="relative flex h-2 w-2">
+              {isLiveActive && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              )}
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${isLiveActive ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+            </span>
+            <span className="font-mono tracking-tight">{isLiveActive ? 'REAL-TIME LIVE (2.5s)' : 'PAUSED'}</span>
+          </button>
+
           <button
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors border border-slate-200"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-            <span>Refresh Telemetry</span>
+            <span>Sync</span>
           </button>
         </div>
       </div>

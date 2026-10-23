@@ -28,8 +28,8 @@ export const SecurityEvents: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedEvent, setSelectedEvent] = useState<SecurityEvent | null>(null);
 
-  const loadEvents = async () => {
-    setIsLoading(true);
+  const loadEvents = async (silent: boolean = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const data = await api.getEvents({
         page,
@@ -44,13 +44,21 @@ export const SecurityEvents: React.FC = () => {
     } catch (err) {
       console.error('Failed to load events:', err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadEvents();
+    loadEvents(false);
   }, [page, severityFilter, eventTypeFilter]);
+
+  // Real-time stream sync with DynamoDB
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadEvents(true);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [page, severityFilter, eventTypeFilter, searchQuery]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();

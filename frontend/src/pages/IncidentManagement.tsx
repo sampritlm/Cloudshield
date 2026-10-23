@@ -34,8 +34,8 @@ export const IncidentManagement: React.FC = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
 
-  const loadIncidents = async () => {
-    setIsLoading(true);
+  const loadIncidents = async (silent: boolean = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const data = await api.getIncidents({
         page,
@@ -50,13 +50,21 @@ export const IncidentManagement: React.FC = () => {
     } catch (err) {
       console.error('Failed to load incidents:', err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    loadIncidents();
+    loadIncidents(false);
   }, [page, severityFilter, statusFilter]);
+
+  // Real-time synchronization with SQS / DynamoDB incidents
+  useEffect(() => {
+    const interval = setInterval(() => {
+      loadIncidents(true);
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [page, severityFilter, statusFilter, searchQuery]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
