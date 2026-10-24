@@ -48,3 +48,7 @@ Thumbs.db
 # Database / Local storage
 *.sqlite3
 *.db
+
+# Local test scripts containing demo keys
+backend/test_iam_demo.py
+scratch*

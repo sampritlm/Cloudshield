@@ -1,0 +1,23 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Sid": "AllowListBucketWithAuditPrefix",
+            "Effect": "Allow",
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetBucketLocation"
+            ],
+            "Resource": "arn:aws:s3:::cloudshield-reports-919551759864-ap-south-1"
+        },
+        {
+            "Sid": "AllowAuditReportsAccessOnly",
+            "Effect": "Allow",
+            "Action": [
+                "s3:GetObject",
+                "s3:GetObjectVersion"
+            ],
+            "Resource": "arn:aws:s3:::cloudshield-reports-919551759864-ap-south-1/audit-reports/*"
+        }
+    ]
+}

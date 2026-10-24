@@ -42,15 +42,48 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
   if (!response.ok) {
     let errorMsg = `HTTP Error ${response.status}: ${response.statusText}`;
+    let detailData: any = null;
     try {
       const errorData = await response.json();
       if (errorData.detail) {
-        errorMsg = typeof errorData.detail === 'string' ? errorData.detail : JSON.stringify(errorData.detail);
+        detailData = errorData.detail;
+        if (typeof errorData.detail === 'string') {
+          errorMsg = errorData.detail;
+        } else if (errorData.detail.message) {
+          errorMsg = errorData.detail.message;
+        } else {
+          errorMsg = JSON.stringify(errorData.detail);
+        }
       }
     } catch {
       // response wasn't JSON
     }
-    throw new Error(errorMsg);
+
+    // Check for rule detection telemetry in response headers
+    const ruleCode = response.headers.get('X-Rule-Code');
+    if (ruleCode || (typeof detailData === 'string' && detailData.includes('RULE_01'))) {
+      const failedAttempts = parseInt(response.headers.get('X-Failed-Attempts') || '1');
+      const isTriggered = response.headers.get('X-Rule-Triggered') === 'true' || failedAttempts >= 5 || errorMsg.includes('RULE_01');
+      detailData = {
+        message: errorMsg,
+        failed_attempts: failedAttempts,
+        threshold: parseInt(response.headers.get('X-Threshold') || '5'),
+        window_seconds: parseInt(response.headers.get('X-Window-Seconds') || '300'),
+        rule_triggered: isTriggered,
+        rule_code: ruleCode || 'RULE_01',
+        rule_name: response.headers.get('X-Rule-Name') || 'Repeated Failed Login',
+        penalty: response.headers.get('X-Penalty') || '+40 pts',
+        risk_score: parseInt(response.headers.get('X-Risk-Score') || (isTriggered ? '65' : '10')),
+        severity: response.headers.get('X-Severity') || (isTriggered ? 'HIGH' : 'LOW'),
+        incident_created: Boolean(response.headers.get('X-Incident-Id')),
+        incident_id: response.headers.get('X-Incident-Id') || undefined,
+        event_id: response.headers.get('X-Event-Id') || undefined
+      };
+    }
+
+    const err: any = new Error(errorMsg);
+    err.data = detailData;
+    throw err;
   }
 
   return response.json();
@@ -360,6 +393,117 @@ export const api = {
     return request('/user/portal/preferences', {
       method: 'PATCH',
       body: JSON.stringify(preferences),
+    });
+  },
+
+  // Failed Login Simulation for RULE_01
+  simulateFailedLoginBurst: async (email: string): Promise<any> => {
+    return request('/auth/simulate-failed-burst', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    });
+  },
+
+  // User Portal Rules Sandbox & Detector
+  getUserRulesCatalog: async (): Promise<any[]> => {
+    return request('/user/portal/rules-catalog');
+  },
+
+  simulateUserRule: async (payload: { rule_code: string; custom_ip?: string; custom_user?: string }): Promise<any> => {
+    return request('/user/portal/simulate-rule', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  testDetectionRule: async (payload: { rule_code: string; custom_ip?: string; custom_user?: string }): Promise<any> => {
+    return request('/user/portal/test-detection', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  getCorporateResources: async (): Promise<any[]> => {
+    return request('/user/portal/corporate-resources');
+  },
+
+  accessCorporateResource: async (resource_path: string, source_ip?: string): Promise<any> => {
+    return request('/user/portal/access-resource', {
+      method: 'POST',
+      body: JSON.stringify({ resource_path, source_ip }),
+    });
+  },
+
+  // Resources Library (Downloadable Files in S3 / Storage)
+  getUserDownloadableResources: async (): Promise<any[]> => {
+    return request('/user/portal/library/resources');
+  },
+
+  getResourceDownloadUrl: (resourceId: string): string => {
+    return `${API_BASE}/user/portal/library/resources/${resourceId}/download`;
+  },
+
+  downloadResourceFile: async (resourceId: string): Promise<{ success: boolean; filename?: string; threat?: any }> => {
+    const url = `${API_BASE}/user/portal/library/resources/${resourceId}/download`;
+    const token = localStorage.getItem('token');
+    const headers: Record<string, string> = {};
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+
+    const res = await fetch(url, { headers });
+    if (!res.ok) {
+      let threatData: any = null;
+      try {
+        const errorJson = await res.json();
+        threatData = errorJson.detail || errorJson;
+      } catch {
+        threatData = {
+          message: 'Access denied: CloudShield Threat Detector intercepted unauthorized file download.',
+          rule_code: 'RULE_03',
+          threat_detected: true,
+          penalty: '+45 pts',
+          risk_score: 45
+        };
+      }
+      return { success: false, threat: threatData };
+    }
+
+    const blob = await res.blob();
+    const disposition = res.headers.get('content-disposition');
+    let filename = 'document';
+    if (disposition && disposition.includes('filename=')) {
+      filename = disposition.split('filename=')[1].replace(/["']/g, '').trim();
+    }
+
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(downloadUrl);
+
+    return { success: true, filename };
+  },
+
+  // Notifications Management
+  markNotificationRead: async (notificationId: string): Promise<any> => {
+    return request(`/user/portal/notifications/${notificationId}/read`, { method: 'POST' });
+  },
+
+  markAllNotificationsRead: async (): Promise<any> => {
+    return request('/user/portal/notifications/mark-all-read', { method: 'POST' });
+  },
+
+  // CanIPhish Mail Activity
+  getUserMailActivity: async (): Promise<any> => {
+    return request('/user/portal/mail/activity');
+  },
+
+  reportPhishingFromMail: async (payload: { campaign_name: string; campaign_id?: string }): Promise<any> => {
+    return request('/user/portal/mail/report-phish', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 };

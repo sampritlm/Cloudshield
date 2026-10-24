@@ -1,0 +1,45 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 898 >>
+stream
+BT /F1 16 Tf 50 750 Td (Enterprise Information Security Policy) Tj ET
+BT /F2 10 Tf 50 720 Td (CloudShield Enterprise Cyber Defense Document) Tj ET
+BT /F2 10 Tf 50 680 Td (SECTION 1: PURPOSE & SCOPE) Tj ET
+BT /F2 10 Tf 50 658 Td (This policy outlines corporate cybersecurity requirements for all employees.) Tj ET
+BT /F2 10 Tf 50 636 Td (SECTION 2: ACCESS CONTROL & CREDENTIAL PROTECTION) Tj ET
+BT /F2 10 Tf 50 614 Td (All access to corporate cloud resources requires Multi-Factor Authentication.) Tj ET
+BT /F2 10 Tf 50 592 Td (Root credentials and API keys must never be committed to source code repositories.) Tj ET
+BT /F2 10 Tf 50 570 Td (SECTION 3: THREAT MONITORING) Tj ET
+BT /F2 10 Tf 50 548 Td (CloudShield continuously monitors API request bursts and perimeter IP breaches.) Tj ET
+BT /F2 10 Tf 50 526 Td (Violations are automatically converted into SOC incidents with risk penalties.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000253 00000 n 
+0000000000 00000 n 
+0000000000 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+500
+%%EOF

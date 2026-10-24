@@ -1,0 +1,43 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 786 >>
+stream
+BT /F1 16 Tf 50 750 Td (Social Engineering Tactics & Defense Handout) Tj ET
+BT /F2 10 Tf 50 720 Td (CloudShield Enterprise Cyber Defense Document) Tj ET
+BT /F2 10 Tf 50 680 Td (SUMMARY OF COMMON SOCIAL ENGINEERING TECHNIQUES:) Tj ET
+BT /F2 10 Tf 50 658 Td (1. Phishing: Deceptive emails masquerading as trusted institutions \(Google, MS365\).) Tj ET
+BT /F2 10 Tf 50 636 Td (2. Spear Phishing: Highly targeted lures addressing employees by name and department.) Tj ET
+BT /F2 10 Tf 50 614 Td (3. Pretexting: Fabricating an urgent scenario \(HR payroll direct deposit update\).) Tj ET
+BT /F2 10 Tf 50 592 Td (4. Quid Pro Quo: Offering a fake IT software update or security scan.) Tj ET
+BT /F2 10 Tf 50 570 Td (DEFENSE RULE: When uncertain, verify through out-of-band communication.) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000253 00000 n 
+0000000000 00000 n 
+0000000000 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+500
+%%EOF

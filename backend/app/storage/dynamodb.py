@@ -1,5 +1,6 @@
 import json
 import logging
+import uuid
 from typing import List, Optional, Tuple, Dict, Any
 from datetime import datetime, timezone
 import boto3
@@ -259,8 +260,8 @@ class DynamoDBStorage(BaseStorage):
         resolved_incidents = sum(1 for i in incidents if i.get("status") == "RESOLVED")
 
         high_crit = [i for i in incidents if i.get("severity") in ["HIGH", "CRITICAL"]]
-        high_crit.sort(key=lambda x: x.get("detected_at", ""), reverse=True)
-        last_alert_time = high_crit[0]["detected_at"] if high_crit else None
+        high_crit.sort(key=lambda x: str(x.get("detected_at") or x.get("timestamp") or ""), reverse=True)
+        last_alert_time = (high_crit[0].get("detected_at") or high_crit[0].get("timestamp")) if high_crit else None
 
         caniphish_events_count = sum(1 for e in events if e.get("source_platform") == "CANIPHISH")
         camp_ids = set(e.get("campaign_id") for e in events if e.get("campaign_id"))
@@ -290,7 +291,7 @@ class DynamoDBStorage(BaseStorage):
         events = events_resp.get("Items", [])
         slots: Dict[str, Dict[str, int]] = {}
         for e in events:
-            ts = e.get("timestamp", "")[:16]
+            ts = str(e.get("timestamp") or e.get("received_at") or "")[:16]
             if not ts:
                 continue
             if ts not in slots:
@@ -307,56 +308,152 @@ class DynamoDBStorage(BaseStorage):
 
     def _item_to_event(self, item: dict) -> SecurityEvent:
         platform_str = item.get("source_platform", "LOCAL_SIMULATION")
+        try:
+            platform = SourcePlatform(platform_str)
+        except (ValueError, TypeError):
+            platform = SourcePlatform.LOCAL_SIMULATION
+
+        sev_raw = str(item.get("severity") or item.get("risk_level") or "LOW").upper()
+        try:
+            sev = SeverityLevel(sev_raw)
+        except (ValueError, TypeError):
+            sev = SeverityLevel.LOW
+
+        raw_p = item.get("raw_payload") or item.get("raw_event") or "{}"
+        if isinstance(raw_p, str):
+            try:
+                raw_payload = json.loads(raw_p)
+            except Exception:
+                raw_payload = {"raw": raw_p}
+        elif isinstance(raw_p, dict):
+            raw_payload = raw_p
+        else:
+            raw_payload = {}
+
+        tr = item.get("triggered_rules", "[]")
+        if isinstance(tr, str):
+            try:
+                triggered_rules = json.loads(tr)
+            except Exception:
+                triggered_rules = [tr] if tr else []
+        elif isinstance(tr, list):
+            triggered_rules = tr
+        else:
+            triggered_rules = []
+
+        dr = item.get("detection_reasons", "[]")
+        if isinstance(dr, str):
+            try:
+                detection_reasons = json.loads(dr)
+            except Exception:
+                detection_reasons = [dr] if dr else []
+        elif isinstance(dr, list):
+            detection_reasons = dr
+        else:
+            detection_reasons = []
+
+        event_id = str(item.get("event_id") or uuid.uuid4())
+        ts = str(item.get("timestamp") or item.get("received_at") or datetime.now(timezone.utc).isoformat())
+        event_type = str(item.get("event_type") or "UNKNOWN")
+        test_user = str(item.get("test_user") or item.get("user") or "unknown@cloudshield.internal")
+        source_ip = str(item.get("source_ip") or "0.0.0.0")
+        resource = str(item.get("resource") or "/aws/cloudshield")
+        action = str(item.get("action") or "MONITOR")
+        detection_result = str(item.get("detection_result") or ("THREAT" if sev in [SeverityLevel.HIGH, SeverityLevel.CRITICAL] else "CLEAN"))
+        risk_score = int(item.get("risk_score", 0))
+
         return SecurityEvent(
-            event_id=item["event_id"],
-            timestamp=item["timestamp"],
-            event_type=item["event_type"],
-            test_user=item["test_user"],
-            source_ip=item["source_ip"],
-            resource=item["resource"],
-            action=item["action"],
-            source_platform=SourcePlatform(platform_str or "LOCAL_SIMULATION"),
+            event_id=event_id,
+            timestamp=ts,
+            event_type=event_type,
+            test_user=test_user,
+            source_ip=source_ip,
+            resource=resource,
+            action=action,
+            source_platform=platform,
             source_event_id=item.get("source_event_id") or None,
             campaign_id=item.get("campaign_id") or None,
             campaign_name=item.get("campaign_name") or None,
             session_id=item.get("session_id"),
             request_count=int(item.get("request_count", 1)),
-            raw_payload=json.loads(item.get("raw_payload", "{}")),
+            raw_payload=raw_payload,
             processed=bool(item.get("processed", 1)),
-            detection_result=item.get("detection_result", "CLEAN"),
-            risk_score=int(item.get("risk_score", 0)),
-            severity=SeverityLevel(item.get("severity", "LOW")),
-            triggered_rules=json.loads(item.get("triggered_rules", "[]")),
-            detection_reasons=json.loads(item.get("detection_reasons", "[]")),
+            detection_result=detection_result,
+            risk_score=risk_score,
+            severity=sev,
+            triggered_rules=triggered_rules,
+            detection_reasons=detection_reasons,
             processed_by=item.get("processed_by", "AWS_LAMBDA_WORKFLOW"),
             incident_id=item.get("incident_id") or None
         )
 
     def _item_to_incident(self, item: dict) -> Incident:
-        raw_history = json.loads(item.get("status_history", "[]"))
-        history = [StatusUpdateEntry(**h) for h in raw_history]
+        raw_history = item.get("status_history", "[]")
+        if isinstance(raw_history, str):
+            try:
+                raw_history = json.loads(raw_history)
+            except Exception:
+                raw_history = []
+        history = []
+        for h in (raw_history if isinstance(raw_history, list) else []):
+            try:
+                history.append(StatusUpdateEntry(**h))
+            except Exception:
+                pass
+
         platform_str = item.get("source_platform", "LOCAL_SIMULATION")
+        try:
+            platform = SourcePlatform(platform_str)
+        except (ValueError, TypeError):
+            platform = SourcePlatform.LOCAL_SIMULATION
+
+        sev_raw = str(item.get("severity") or item.get("risk_level") or "MEDIUM").upper()
+        try:
+            sev = SeverityLevel(sev_raw)
+        except (ValueError, TypeError):
+            sev = SeverityLevel.MEDIUM
+
+        status_raw = str(item.get("status") or "OPEN").upper()
+        try:
+            status = IncidentStatus(status_raw)
+        except (ValueError, TypeError):
+            status = IncidentStatus.OPEN
+
+        reasons = item.get("reasons", "[]")
+        if isinstance(reasons, str):
+            try:
+                reasons = json.loads(reasons)
+            except Exception:
+                reasons = [reasons] if reasons else []
+
+        triggered_rules = item.get("triggered_rules", "[]")
+        if isinstance(triggered_rules, str):
+            try:
+                triggered_rules = json.loads(triggered_rules)
+            except Exception:
+                triggered_rules = [triggered_rules] if triggered_rules else []
+
         return Incident(
-            incident_id=item["incident_id"],
-            event_id=item["event_id"],
+            incident_id=str(item.get("incident_id") or f"inc-{item.get('event_id', uuid.uuid4())}"),
+            event_id=str(item.get("event_id") or "unknown"),
             campaign_id=item.get("campaign_id") or None,
             campaign_name=item.get("campaign_name") or None,
-            threat_type=item["threat_type"],
-            severity=SeverityLevel(item["severity"]),
-            risk_score=int(item["risk_score"]),
-            test_user=item["test_user"],
-            source_ip=item["source_ip"],
-            resource=item["resource"],
-            detected_at=item["detected_at"],
-            reasons=json.loads(item.get("reasons", "[]")),
-            triggered_rules=json.loads(item.get("triggered_rules", "[]")),
-            status=IncidentStatus(item["status"]),
+            threat_type=str(item.get("threat_type") or "SECURITY_THREAT"),
+            severity=sev,
+            risk_score=int(item.get("risk_score", 50)),
+            test_user=str(item.get("test_user") or item.get("user") or "unknown"),
+            source_ip=str(item.get("source_ip") or "0.0.0.0"),
+            resource=str(item.get("resource") or "/aws/cloudshield"),
+            detected_at=str(item.get("detected_at") or item.get("timestamp") or datetime.now(timezone.utc).isoformat()),
+            reasons=reasons if isinstance(reasons, list) else [],
+            triggered_rules=triggered_rules if isinstance(triggered_rules, list) else [],
+            status=status,
             status_history=history,
-            processed_by=item.get("processed_by", "AWS_LAMBDA"),
-            source_platform=SourcePlatform(platform_str or "LOCAL_SIMULATION"),
+            processed_by=str(item.get("processed_by", "AWS_LAMBDA")),
+            source_platform=platform,
             notified_via_sns=bool(item.get("notified_via_sns", 0)),
             sqs_message_id=item.get("sqs_message_id") or None,
-            last_updated_at=item["last_updated_at"]
+            last_updated_at=str(item.get("last_updated_at") or datetime.now(timezone.utc).isoformat())
         )
 
     def get_user_access_status(self, user_identifier: str) -> Dict[str, Any]:

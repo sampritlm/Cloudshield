@@ -13,12 +13,7 @@ def enqueue_incident_to_sqs(incident: Incident) -> Dict[str, Any]:
     Enqueues High and Critical risk incidents to Amazon SQS for asynchronous triage and dispatch.
     Architecture: Threat Detector -> Amazon SQS Queue -> Queue Consumer -> Amazon SNS Alert.
     """
-    # Only High and Critical incidents are routed to the priority triage queue
-    if incident.severity not in [SeverityLevel.HIGH, SeverityLevel.CRITICAL]:
-        return {
-            "mode": "SKIPPED",
-            "reason": f"Incident severity {incident.severity.value} does not require emergency SQS queuing."
-        }
+    # All detected security incidents are routed to the priority triage queue for admin notification
 
     message_body = json.dumps({
         "incident_id": incident.incident_id,

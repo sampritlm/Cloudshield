@@ -59,6 +59,38 @@ DEMO_USERS_DB: Dict[str, dict] = {
         "hashed_password": get_password_hash("User@CloudShield2026!"),
         "role": UserRole.USER,
         "created_at": "2026-01-03T00:00:00Z"
+    },
+    "cloudshield-auditor": {
+        "id": "usr-auditor-04",
+        "email": "cloudshield-auditor",
+        "name": "Alex Mercer (IAM Auditor)",
+        "hashed_password": get_password_hash("DemoUser@CloudShield2026!"),
+        "role": UserRole.ANALYST,
+        "created_at": "2026-10-24T00:00:00Z"
+    },
+    "auditor@cloudshield.internal": {
+        "id": "usr-auditor-04b",
+        "email": "auditor@cloudshield.internal",
+        "name": "Alex Mercer (IAM Auditor)",
+        "hashed_password": get_password_hash("DemoUser@CloudShield2026!"),
+        "role": UserRole.ANALYST,
+        "created_at": "2026-10-24T00:00:00Z"
+    },
+    "cloudshield-intern": {
+        "id": "usr-intern-05",
+        "email": "cloudshield-intern",
+        "name": "Jamie Lee (IAM Intern)",
+        "hashed_password": get_password_hash("DemoUser@CloudShield2026!"),
+        "role": UserRole.USER,
+        "created_at": "2026-10-24T00:00:00Z"
+    },
+    "intern@cloudshield.internal": {
+        "id": "usr-intern-05b",
+        "email": "intern@cloudshield.internal",
+        "name": "Jamie Lee (IAM Intern)",
+        "hashed_password": get_password_hash("DemoUser@CloudShield2026!"),
+        "role": UserRole.USER,
+        "created_at": "2026-10-24T00:00:00Z"
     }
 }
 

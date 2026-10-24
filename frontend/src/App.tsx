@@ -8,22 +8,20 @@ import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { SecurityEvents } from './pages/SecurityEvents';
 import { IncidentManagement } from './pages/IncidentManagement';
-import { AdminCanIPhish } from './pages/admin/AdminCanIPhish';
 import { AdminAlerts } from './pages/admin/AdminAlerts';
 import { SystemMonitoring } from './pages/SystemMonitoring';
 import { Reports } from './pages/Reports';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminSettings } from './pages/admin/AdminSettings';
 import { ThreatSimulator } from './pages/ThreatSimulator';
-import { ThreatInbox } from './pages/ThreatInbox';
 
-// Normal User Pages
+// Normal User Pages (Final 5 Structure)
 import { UserDashboard } from './pages/user/UserDashboard';
-import { UserSimulations } from './pages/user/UserSimulations';
-import { UserInsights } from './pages/user/UserInsights';
-import { UserLearning } from './pages/user/UserLearning';
+import { UserResources } from './pages/user/UserResources';
+import { UserMail } from './pages/user/UserMail';
 import { UserNotifications } from './pages/user/UserNotifications';
 import { UserProfilePage } from './pages/user/UserProfilePage';
+import { UserRuleSandbox } from './pages/user/UserRuleSandbox';
 
 const MainLayout: React.FC = () => {
   const { user, isAdmin, isLoading } = useAuth();
@@ -51,6 +49,48 @@ const MainLayout: React.FC = () => {
       });
     }
   }, [user?.role]);
+
+  const [openIncidentsCount, setOpenIncidentsCount] = useState<number>(0);
+  const [unreadNotificationsCount, setUnreadNotificationsCount] = useState<number>(0);
+
+  // Real-time synchronization of notifications and incidents counts across all portals
+  useEffect(() => {
+    if (!user) return;
+
+    const syncTelemetry = async () => {
+      try {
+        const { api } = await import('./services/api');
+        if (isAdmin && !isUserViewMode) {
+          const res = await api.getIncidents({ limit: 100 });
+          const items = (res as any)?.items || (Array.isArray(res) ? res : []);
+          const open = items.filter((i: any) => i.status === 'OPEN').length;
+          setOpenIncidentsCount(open);
+        } else {
+          const notifs = await api.getUserNotifications();
+          const unread = (notifs || []).filter((n: any) => !n.read).length;
+          setUnreadNotificationsCount(unread);
+        }
+      } catch (e) {}
+    };
+
+    syncTelemetry();
+    const interval = setInterval(syncTelemetry, 2500);
+
+    const handleUpdate = () => syncTelemetry();
+    window.addEventListener('cloudshield:notification-update', handleUpdate);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('cloudshield_telemetry');
+      bc.onmessage = () => syncTelemetry();
+    } catch (e) {}
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('cloudshield:notification-update', handleUpdate);
+      if (bc) bc.close();
+    };
+  }, [user, isAdmin, isUserViewMode]);
 
   const handleToggleUserViewMode = () => {
     if (!isUserViewMode) {
@@ -92,14 +132,14 @@ const MainLayout: React.FC = () => {
           onSelectTab={setCurrentTab}
           isAdmin={isAdmin}
           isUserViewMode={isUserViewMode}
+          openIncidentsCount={openIncidentsCount}
+          unreadNotificationsCount={unreadNotificationsCount}
         />
         <main className="flex-1 overflow-x-hidden pb-12">
           {/* Admin Views */}
           {currentTab === 'overview' && <Dashboard onNavigateTab={setCurrentTab as any} />}
           {currentTab === 'events' && <SecurityEvents />}
           {currentTab === 'incidents' && <IncidentManagement />}
-          {currentTab === 'threat-inbox' && <ThreatInbox />}
-          {currentTab === 'caniphish' && <AdminCanIPhish />}
           {currentTab === 'alerts' && <AdminAlerts />}
           {currentTab === 'system' && <SystemMonitoring />}
           {currentTab === 'reports' && <Reports />}
@@ -112,16 +152,21 @@ const MainLayout: React.FC = () => {
             />
           )}
 
-          {/* Normal User Views */}
+          {/* Normal User Views (Final 5-Page Structure) */}
           {currentTab === 'user-dashboard' && (
             <UserDashboard onNavigateTab={(tab) => setCurrentTab(`user-${tab}` as NavTab)} />
           )}
-          {currentTab === 'user-mailbox' && <ThreatInbox />}
-          {currentTab === 'user-simulations' && <UserSimulations />}
-          {currentTab === 'user-insights' && <UserInsights />}
-          {currentTab === 'user-learning' && <UserLearning />}
+          {currentTab === 'user-resources' && (
+            <UserResources onNavigateTab={(tab) => setCurrentTab(`user-${tab}` as NavTab)} />
+          )}
+          {currentTab === 'user-mail' && <UserMail />}
           {currentTab === 'user-notifications' && <UserNotifications />}
           {currentTab === 'user-profile' && <UserProfilePage />}
+
+          {/* Compatibility aliases */}
+          {currentTab === 'user-sandbox' && <UserResources />}
+          {currentTab === 'user-mailbox' && <UserMail />}
+          {currentTab === 'user-simulations' && <UserMail />}
         </main>
       </div>
     </div>

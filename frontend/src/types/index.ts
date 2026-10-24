@@ -295,6 +295,8 @@ export interface UserDashboardSummary {
   awareness_score: number;
   risk_category: 'LOW' | 'MEDIUM' | 'HIGH';
   risk_category_title: string;
+  threat_risk_score?: number;
+  threat_events_count?: number;
   simulations_received: number;
   links_clicked: number;
   emails_reported: number;

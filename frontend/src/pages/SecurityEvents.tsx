@@ -91,7 +91,7 @@ export const SecurityEvents: React.FC = () => {
           </button>
 
           <button
-            onClick={loadEvents}
+            onClick={() => loadEvents()}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-white bg-navy-900 hover:bg-navy-800 rounded-lg shadow-sm transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />

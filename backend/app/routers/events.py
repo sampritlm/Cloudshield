@@ -113,15 +113,14 @@ def process_and_ingest_event(event_in: SecurityEventCreate, actor: str = "SYSTEM
                 last_updated_at=now_str
             )
 
-            # Route High/Critical incidents to SQS and SNS
-            if eval_result.severity in [SeverityLevel.HIGH, SeverityLevel.CRITICAL]:
-                sqs_res = enqueue_incident_to_sqs(new_incident)
-                if sqs_res.get("message_id"):
-                    new_incident.sqs_message_id = sqs_res["message_id"]
+            # Route security incidents to SQS and dispatch SNS alert notification to admin
+            sqs_res = enqueue_incident_to_sqs(new_incident)
+            if sqs_res.get("message_id"):
+                new_incident.sqs_message_id = sqs_res["message_id"]
 
-                sns_res = publish_alert_to_sns(new_incident)
-                if sns_res.get("status") in ["PUBLISHED", "SENT_SIMULATED"]:
-                    new_incident.notified_via_sns = True
+            sns_res = publish_alert_to_sns(new_incident)
+            if sns_res.get("status") in ["PUBLISHED", "SENT_SIMULATED"]:
+                new_incident.notified_via_sns = True
 
             storage.save_incident(new_incident)
             event.incident_id = incident_id

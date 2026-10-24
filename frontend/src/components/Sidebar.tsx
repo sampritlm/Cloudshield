@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   Activity,
   AlertTriangle,
-  Fish,
   Bell,
   Server,
   FileText,
@@ -15,7 +14,8 @@ import {
   BookOpen,
   User,
   Shield,
-  ShieldAlert
+  ShieldAlert,
+  FolderDown
 } from 'lucide-react';
 
 export type NavTab =
@@ -31,14 +31,18 @@ export type NavTab =
   | 'users'
   | 'settings'
   | 'simulator'
-  // Normal user tabs
+  // Normal user tabs (Final 5-page structure)
   | 'user-dashboard'
+  | 'user-resources'
+  | 'user-mail'
+  | 'user-notifications'
+  | 'user-profile'
+  // Legacy aliases
   | 'user-mailbox'
   | 'user-simulations'
+  | 'user-sandbox'
   | 'user-insights'
-  | 'user-learning'
-  | 'user-notifications'
-  | 'user-profile';
+  | 'user-learning';
 
 interface Props {
   currentTab: NavTab;
@@ -82,20 +86,6 @@ export const Sidebar: React.FC<Props> = ({
       badgeColor: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
     },
     {
-      id: 'threat-inbox' as NavTab,
-      label: 'Gmail Threat Client',
-      icon: Mail,
-      badge: 'Live Lures',
-      badgeColor: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
-    },
-    {
-      id: 'caniphish' as NavTab,
-      label: 'CanIPhish Integration',
-      icon: Fish,
-      badge: 'API v3',
-      badgeColor: 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
-    },
-    {
       id: 'alerts' as NavTab,
       label: 'Alerts & Notifications',
       icon: Bell,
@@ -131,9 +121,9 @@ export const Sidebar: React.FC<Props> = ({
     },
     {
       id: 'simulator' as NavTab,
-      label: 'Threat Simulator',
+      label: 'Detection Testbed',
       icon: Zap,
-      badge: '5 Demos',
+      badge: '5 Vectors',
       badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
     },
   ];
@@ -141,36 +131,23 @@ export const Sidebar: React.FC<Props> = ({
   const userNavItems = [
     {
       id: 'user-dashboard' as NavTab,
-      label: 'My Dashboard',
+      label: 'Dashboard',
       icon: LayoutDashboard,
       badge: null,
     },
     {
-      id: 'user-mailbox' as NavTab,
-      label: 'My Gmail Inbox',
-      icon: Mail,
-      badge: 'Interactive',
-      badgeColor: 'bg-rose-500/20 text-rose-300 border border-rose-500/30',
+      id: 'user-resources' as NavTab,
+      label: 'Resources',
+      icon: FolderDown,
+      badge: '12 Files',
+      badgeColor: 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30',
     },
     {
-      id: 'user-simulations' as NavTab,
-      label: 'My Simulation Results',
+      id: 'user-mail' as NavTab,
+      label: 'Mail',
       icon: Mail,
       badge: 'CanIPhish',
       badgeColor: 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
-    },
-    {
-      id: 'user-insights' as NavTab,
-      label: 'My Risk Insights',
-      icon: BrainCircuit,
-      badge: null,
-    },
-    {
-      id: 'user-learning' as NavTab,
-      label: 'Security Awareness',
-      icon: BookOpen,
-      badge: 'Interactive',
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30',
     },
     {
       id: 'user-notifications' as NavTab,
@@ -181,7 +158,7 @@ export const Sidebar: React.FC<Props> = ({
     },
     {
       id: 'user-profile' as NavTab,
-      label: 'My Profile',
+      label: 'Profile',
       icon: User,
       badge: null,
     },
@@ -198,17 +175,16 @@ export const Sidebar: React.FC<Props> = ({
             {isUserView ? 'Employee Security Portal' : 'SOC Admin Console'}
           </div>
           <span
-            className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-              isUserView
+            className={`text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${isUserView
                 ? 'bg-sky-500/20 text-sky-300 border border-sky-500/30'
                 : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
-            }`}
+              }`}
           >
             {isUserView ? 'User Role' : 'Admin Role'}
           </span>
         </div>
         <div className="text-xs text-slate-400 mt-1">
-          {isUserView ? 'Vigilance & Simulation Self-Service' : 'Intelligent Threat Detection & Response'}
+          {isUserView ? 'Vigilance & Threat Detection Self-Service' : 'Intelligent Threat Detection & Response'}
         </div>
       </div>
 
@@ -221,11 +197,10 @@ export const Sidebar: React.FC<Props> = ({
             <button
               key={item.id}
               onClick={() => onSelectTab(item.id)}
-              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${
-                isActive
+              className={`w-full flex items-center justify-between px-3 py-2.5 rounded-xl text-xs font-semibold transition-all ${isActive
                   ? 'bg-sky-600 text-white shadow-sm'
                   : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-3">
                 <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-slate-400'}`} />
@@ -233,9 +208,8 @@ export const Sidebar: React.FC<Props> = ({
               </div>
               {item.badge && (
                 <span
-                  className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-medium ${
-                    isActive ? 'bg-white/20 text-white' : item.badgeColor
-                  }`}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-mono font-medium ${isActive ? 'bg-white/20 text-white' : item.badgeColor
+                    }`}
                 >
                   {item.badge}
                 </span>

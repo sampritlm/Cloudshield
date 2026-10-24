@@ -17,7 +17,8 @@ import {
   Check,
   ChevronRight,
   Layers,
-  Sparkles
+  Sparkles,
+  ShieldAlert
 } from 'lucide-react';
 import {
   AreaChart,
@@ -41,25 +42,46 @@ export const UserDashboard: React.FC<Props> = ({ onNavigateTab }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const fetchDashboard = async () => {
+  const fetchDashboard = async (silent: boolean = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const res = await api.getUserDashboard();
       setData(res);
     } catch (err) {
       console.error('Failed to load user dashboard data:', err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
       setIsRefreshing(false);
     }
   };
 
   useEffect(() => {
     fetchDashboard();
+
+    // Live background polling every 3 seconds
+    const interval = setInterval(() => {
+      fetchDashboard(true);
+    }, 3000);
+
+    const handleUpdate = () => fetchDashboard(true);
+    window.addEventListener('cloudshield:notification-update', handleUpdate);
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('cloudshield_telemetry');
+      bc.onmessage = () => fetchDashboard(true);
+    } catch (e) {}
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('cloudshield:notification-update', handleUpdate);
+      if (bc) bc.close();
+    };
   }, []);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    fetchDashboard();
+    fetchDashboard(false);
   };
 
   if (isLoading || !data) {
@@ -158,6 +180,59 @@ export const UserDashboard: React.FC<Props> = ({ onNavigateTab }) => {
             <RefreshCw className={`w-4 h-4 text-slate-600 ${isRefreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
+      </div>
+
+      {/* Active Threat Penalty Notice (if user has active violations) */}
+      {data.threat_risk_score && data.threat_risk_score > 0 ? (
+        <div className="bg-rose-50 border-2 border-rose-300 rounded-2xl p-4 text-rose-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="text-xs font-bold text-rose-900">
+                Security Policy Infractions Detected &bull; +{data.threat_risk_score} Risk Points Added
+              </div>
+              <div className="text-[11px] text-rose-700 mt-0.5">
+                Unauthorized access to restricted cloud assets was detected on your account and forwarded to the SOC Administrator.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => onNavigateTab?.('notifications')}
+            className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors shrink-0"
+          >
+            View Threat Notifications
+          </button>
+        </div>
+      ) : null}
+
+      {/* Downloadable Security Resources Featured Banner */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-2xl p-5 text-white shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4 border border-indigo-900/50">
+        <div className="flex items-center gap-3.5">
+          <div className="w-10 h-10 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-indigo-400 shrink-0">
+            <ShieldAlert className="w-5 h-5" />
+          </div>
+          <div>
+            <div className="text-[11px] font-mono uppercase text-indigo-300 font-bold tracking-wider">
+              Downloadable File Library &bull; Certified Protocols
+            </div>
+            <div className="text-sm font-bold text-white mt-0.5">
+              Access 12 Security Guides, Checklists, Policies &amp; Playbooks
+            </div>
+            <div className="text-[11px] text-slate-300">
+              Download real PDF guides, DOCX checklists, PPTX training decks, and CSV audits for offline reference.
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onNavigateTab?.('resources')}
+          className="px-4 py-2 bg-indigo-500 hover:bg-indigo-400 text-white rounded-xl text-xs font-bold transition-all shadow flex items-center gap-1.5 self-start md:self-auto shrink-0"
+        >
+          <span>Open Resources Library</span>
+          <ChevronRight className="w-4 h-4" />
+        </button>
       </div>
 
       {/* 2. Four Core Metrics Cards */}
@@ -591,10 +666,10 @@ export const UserDashboard: React.FC<Props> = ({ onNavigateTab }) => {
           </div>
           {onNavigateTab && (
             <button
-              onClick={() => onNavigateTab('insights')}
-              className="text-xs font-semibold text-slate-600 hover:text-slate-900 flex items-center gap-1 transition-colors"
+              onClick={() => onNavigateTab('resources')}
+              className="text-xs font-semibold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 transition-colors"
             >
-              <span>View Full Insights</span>
+              <span>View Resources &amp; Guides</span>
               <ArrowUpRight className="w-3.5 h-3.5" />
             </button>
           )}

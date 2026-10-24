@@ -37,16 +37,21 @@ async def list_users(current_user: UserProfile = Depends(require_admin_role)):
     """
     storage = get_storage()
     access_controls = {item["user_identifier"]: item for item in storage.list_user_access_controls()}
+    all_events, _ = storage.list_events(limit=500)
 
     users_list = []
     for email, user in DEMO_USERS_DB.items():
         ac = access_controls.get(email, {})
+        u_events = [e for e in all_events if e.test_user.lower() == email.lower() and e.risk_score > 0]
+        user_risk = sum(e.risk_score for e in u_events)
         users_list.append({
             "id": user["id"],
             "email": user["email"],
             "name": user["name"],
             "role": user["role"].value if hasattr(user["role"], "value") else str(user["role"]),
             "created_at": user.get("created_at", "2026-01-01T00:00:00Z"),
+            "risk_score": user_risk,
+            "threat_events_count": len(u_events),
             "status": ac.get("status", "ACTIVE"),
             "status_reason": ac.get("reason"),
             "status_updated_at": ac.get("updated_at"),

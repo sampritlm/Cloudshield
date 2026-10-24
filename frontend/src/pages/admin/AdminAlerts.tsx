@@ -30,15 +30,15 @@ export const AdminAlerts: React.FC = () => {
   const [isSubscribing, setIsSubscribing] = useState(false);
   const [isDirectTesting, setIsDirectTesting] = useState<string | null>(null);
 
-  const fetchAlerts = async () => {
-    setIsLoading(true);
+  const fetchAlerts = async (silent: boolean = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const data = await api.getAlerts();
       setAlerts(data || []);
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.message || 'Failed to fetch alerts' });
+      if (!silent) setMessage({ type: 'error', text: err.message || 'Failed to fetch alerts' });
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 
@@ -55,6 +55,28 @@ export const AdminAlerts: React.FC = () => {
   useEffect(() => {
     fetchAlerts();
     fetchSubscribers();
+
+    // 1. Live real-time background polling every 2.5 seconds
+    const interval = setInterval(() => {
+      fetchAlerts(true);
+    }, 2500);
+
+    // 2. Immediate window event listener for local actions
+    const handleUpdate = () => fetchAlerts(true);
+    window.addEventListener('cloudshield:notification-update', handleUpdate);
+
+    // 3. Cross-tab real-time BroadcastChannel sync
+    let bc: BroadcastChannel | null = null;
+    try {
+      bc = new BroadcastChannel('cloudshield_telemetry');
+      bc.onmessage = () => fetchAlerts(true);
+    } catch (e) {}
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('cloudshield:notification-update', handleUpdate);
+      if (bc) bc.close();
+    };
   }, []);
 
   const handleSubscribeEmail = async () => {
@@ -139,7 +161,7 @@ export const AdminAlerts: React.FC = () => {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={fetchAlerts}
+            onClick={() => fetchAlerts(false)}
             disabled={isLoading}
             className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-lg text-xs font-semibold text-slate-700 shadow-sm transition-all"
           >

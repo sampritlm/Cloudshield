@@ -1,0 +1,6 @@
+Checklist_ID,Security_Domain,Control_Description,Verification_Frequency,Status
+CHK-01,Identity,Enforce Multi-Factor Authentication on all accounts,Daily,ACTIVE
+CHK-02,Credential Hygiene,Unique 16+ character password per service,Monthly,VERIFIED
+CHK-03,Phishing Awareness,Report simulated and live phishing lures to SOC,Weekly,ACTIVE
+CHK-04,Network Perimeter,Access corporate cloud resources via authorized VPN only,Continuous,ENFORCED
+CHK-05,Asset Protection,Never download IAM keys or database credentials to local disk,Continuous,COMPLIANT
