@@ -85,3 +85,11 @@ async def reset_demo(current_user: UserProfile = Depends(require_analyst_or_admi
     """Resets storage to standard initial demo state."""
     seed_demo_data(force=True)
     return {"status": "SUCCESS", "message": "Demo security events and incidents re-seeded successfully."}
+
+# AWS Lambda ASGI Adapter
+try:
+    from mangum import Mangum
+    handler = Mangum(app)
+except ImportError:
+    handler = None
+
