@@ -380,6 +380,28 @@ async def simulate_caniphish_event(
 
     ingested_event = process_and_ingest_event(event_in, actor="CanIPhish Interactive Simulation")
 
+    # Separate SNS Alert Dispatches: link click vs. credential compromise
+    sns_res = {}
+    if req.event_type in ["payloadClicked", "employeeCompromised"]:
+        from app.aws.sns_handler import publish_caniphish_threat_alert
+        sns_res = publish_caniphish_threat_alert(
+            event_type=req.event_type,
+            user_email=event_in.test_user,
+            campaign_name=event_in.campaign_name or "CanIPhish Simulation",
+            phishing_site=site["title"],
+            client_ip=event_in.source_ip,
+            incident_id=ingested_event.incident_id
+        )
+
+        if ingested_event.incident_id:
+            from app.models.schemas import SeverityLevel
+            st = get_storage()
+            inc = st.get_incident(ingested_event.incident_id)
+            if inc:
+                inc.notified_via_sns = True
+                inc.severity = SeverityLevel.CRITICAL if req.event_type == "employeeCompromised" else SeverityLevel.HIGH
+                st.save_incident(inc)
+
     return {
         "status": "SUCCESS",
         "message": f"CanIPhish '{req.event_type}' simulation event successfully processed by CloudShield engine.",
@@ -389,7 +411,9 @@ async def simulate_caniphish_event(
         "incident_id": ingested_event.incident_id,
         "triggered_rules": ingested_event.triggered_rules,
         "detection_reasons": ingested_event.detection_reasons,
-        "source_platform": "CANIPHISH"
+        "source_platform": "CANIPHISH",
+        "sns_notified": bool(sns_res.get("status") in ["PUBLISHED", "SENT_SIMULATED"]),
+        "sns_message_id": sns_res.get("message_id")
     }
 
 @router.get("/simulation-results")

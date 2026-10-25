@@ -126,6 +126,74 @@ def publish_unauthorized_access_alert(
         logger.error(f"SNS publish failed for unauthorized access: {e}")
         return {"mode": "ERROR", "error": str(e)}
 
+def publish_caniphish_threat_alert(
+    event_type: str,
+    user_email: str,
+    campaign_name: str,
+    phishing_site: str,
+    client_ip: str,
+    incident_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Sends an immediate urgent security alert to the admin via Amazon SNS
+    whenever a CanIPhish simulation link is clicked or credentials are compromised.
+    """
+    is_compromised = (event_type == "employeeCompromised")
+
+    if is_compromised:
+        subject = f"[CloudShield CRITICAL] Employee Credential Compromised: {user_email}"[:98]
+        threat_desc = "CRITICAL CREDENTIAL HARVEST / ACCOUNT TAKEOVER RISK"
+        severity = "CRITICAL"
+        risk_score = 95
+        action_note = "Employee submitted credentials to a deceptive phishing login portal masquerading as corporate services."
+    else:
+        subject = f"[CloudShield ALERT] Phishing Lure Link Clicked by {user_email}"[:98]
+        threat_desc = "DECEPTIVE PHISHING LINK INTERACTION DETECTED"
+        severity = "HIGH"
+        risk_score = 65
+        action_note = "Employee clicked an active phishing lure link, navigating to an unauthorized external lookalike portal."
+
+    body = (
+        f"CLOUDSHIELD PHISHING SIMULATION ALERT\n"
+        f"=====================================\n"
+        f"EVENT TYPE   : {threat_desc}\n"
+        f"STAGE        : {'Stage 2: Credentials Compromised' if is_compromised else 'Stage 1: Link Clicked'}\n"
+        f"SEVERITY     : {severity} (Risk Score: {risk_score}/100)\n"
+        f"USER IDENTITY: {user_email}\n"
+        f"CAMPAIGN     : {campaign_name}\n"
+        f"TARGET PORTAL: {phishing_site}\n"
+        f"SOURCE IP    : {client_ip}\n"
+        f"INCIDENT ID  : {incident_id or 'Auto-created in DynamoDB'}\n\n"
+        f"DETAILS      : {action_note}\n\n"
+        f"ACTION REQUIRED: Review user security awareness training status in CloudShield Admin Console."
+    )
+
+    if not settings.AWS_MODE or not settings.SNS_ALERT_TOPIC_ARN:
+        logger.info(f"[SIMULATED SNS] CanIPhish {event_type} alert for {user_email}")
+        return {"mode": "SIMULATED", "status": "SENT_SIMULATED", "subject": subject}
+
+    client = get_boto3_client("sns")
+    if not client:
+        return {"mode": "ERROR", "error": "SNS client unavailable"}
+
+    try:
+        response = client.publish(
+            TopicArn=settings.SNS_ALERT_TOPIC_ARN,
+            Subject=subject,
+            Message=body
+        )
+        msg_id = response.get("MessageId")
+        logger.info(f"Published CanIPhish alert to SNS {settings.SNS_ALERT_TOPIC_ARN}: {msg_id}")
+        return {
+            "mode": "AWS_SNS",
+            "status": "PUBLISHED",
+            "topic_arn": settings.SNS_ALERT_TOPIC_ARN,
+            "message_id": msg_id
+        }
+    except Exception as e:
+        logger.error(f"SNS publish failed for CanIPhish: {e}")
+        return {"mode": "ERROR", "error": str(e)}
+
 def subscribe_email_to_sns(email: str) -> Dict[str, Any]:
     """
     Subscribes a Gmail or corporate email address to the CloudShield Amazon SNS topic.

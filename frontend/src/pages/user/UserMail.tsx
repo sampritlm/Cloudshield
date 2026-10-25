@@ -416,8 +416,8 @@ export const UserMail: React.FC = () => {
       // Show toast: Intercepted & Added to Risk Score + Alerted Admin
       setToastMessage({
         type: 'threat',
-        text: '🚨 Deceptive Link Click Detected (+35 Risk Penalty)',
-        detail: `CloudShield detector intercepted link click on ${currentEmail.lookalikeDomain}. SOC Incident generated and admin alerted.`
+        text: '🚨 Deceptive Link Click Detected (+50 Risk Penalty)',
+        detail: `CloudShield detector intercepted link click on ${currentEmail.lookalikeDomain}. High priority incident generated and Amazon SNS alert dispatched to Admin.`
       });
       setTimeout(() => setToastMessage(null), 6000);
     } catch (err: any) {
@@ -457,8 +457,8 @@ export const UserMail: React.FC = () => {
       setShowFakeLandingModal(false);
       setToastMessage({
         type: 'threat',
-        text: '🔥 CRITICAL THREAT: Credentials Harvested (+55 Risk Score Added)',
-        detail: `Credentials submitted to lookalike portal ${currentEmail.lookalikeDomain}. High priority incident dispatched to Admin & SOC.`
+        text: '🔥 CRITICAL THREAT: Credentials Harvested (+95 Risk Score Added)',
+        detail: `Credentials submitted to lookalike portal ${currentEmail.lookalikeDomain}. Separate Critical incident logged and immediate Amazon SNS alert dispatched to Admin.`
       });
       setTimeout(() => setToastMessage(null), 7000);
     } catch (err: any) {

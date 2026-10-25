@@ -91,6 +91,26 @@ async def receive_caniphish_webhook(
     # Ingest through monitoring pipeline
     ingested_event = process_and_ingest_event(event_in, actor="CanIPhish Outbound Webhook")
 
+    # Dispatch dedicated Amazon SNS alert for link clicks or credential compromise
+    if event_name in ["payloadClicked", "employeeCompromised"]:
+        from app.aws.sns_handler import publish_caniphish_threat_alert
+        publish_caniphish_threat_alert(
+            event_type=event_name,
+            user_email=employee_email,
+            campaign_name=campaign_name,
+            phishing_site=body.get("landingPage") or "Simulated Impersonation Portal",
+            client_ip=source_ip,
+            incident_id=ingested_event.incident_id
+        )
+
+        if ingested_event.incident_id:
+            from app.models.schemas import SeverityLevel
+            inc = storage.get_incident(ingested_event.incident_id)
+            if inc:
+                inc.notified_via_sns = True
+                inc.severity = SeverityLevel.CRITICAL if event_name == "employeeCompromised" else SeverityLevel.HIGH
+                storage.save_incident(inc)
+
     # Record latest webhook in integration status table
     existing_status = storage.get_integration_status("CanIPhish") or {}
     existing_status.update({
