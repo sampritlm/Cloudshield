@@ -160,16 +160,16 @@ export const Login: React.FC = () => {
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div>
               <label className="block text-xs font-semibold text-slate-700 uppercase tracking-wider mb-1">
-                Security Identity Email
+                Security Identity (Email or Username)
               </label>
               <div className="relative rounded-lg shadow-sm">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
                   <Mail className="w-4 h-4" />
                 </div>
                 <input
-                  type="email"
+                  type="text"
                   required
-                  placeholder="admin@cloudshield.internal"
+                  placeholder="admin@cloudshield.internal or cloudshield-auditor"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="block w-full pl-9 pr-3 py-2.5 text-sm bg-slate-50 border border-slate-300 rounded-lg text-slate-900 placeholder:text-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-navy-900 focus:border-navy-900"
@@ -264,26 +264,26 @@ export const Login: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => handleQuickFill('cloudshield-auditor', 'DemoUser@CloudShield2026!')}
+                onClick={() => handleQuickFill('auditor@cloudshield.internal', 'DemoUser@CloudShield2026!')}
                 className="p-2 text-left bg-indigo-50/70 hover:bg-indigo-100/70 border border-indigo-200 rounded-lg transition-colors"
               >
                 <div className="font-semibold text-indigo-950 flex items-center gap-1">
                   <span>IAM Auditor</span>
                   <span className="text-[9px] bg-indigo-200 text-indigo-800 px-1 rounded">S3 Audit</span>
                 </div>
-                <div className="text-[11px] text-indigo-700 truncate">cloudshield-auditor</div>
+                <div className="text-[11px] text-indigo-700 truncate">auditor@cloudshield.internal</div>
               </button>
 
               <button
                 type="button"
-                onClick={() => handleQuickFill('cloudshield-intern', 'DemoUser@CloudShield2026!')}
+                onClick={() => handleQuickFill('intern@cloudshield.internal', 'DemoUser@CloudShield2026!')}
                 className="p-2 text-left bg-amber-50/70 hover:bg-amber-100/70 border border-amber-200 rounded-lg transition-colors"
               >
                 <div className="font-semibold text-amber-950 flex items-center gap-1">
                   <span>IAM Intern</span>
                   <span className="text-[9px] bg-amber-200 text-amber-800 px-1 rounded">Public Only</span>
                 </div>
-                <div className="text-[11px] text-amber-700 truncate">cloudshield-intern</div>
+                <div className="text-[11px] text-amber-700 truncate">intern@cloudshield.internal</div>
               </button>
             </div>
           </div>
