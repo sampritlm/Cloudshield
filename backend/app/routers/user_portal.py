@@ -1365,6 +1365,7 @@ async def access_corporate_resource(
             "user_role": current_user.role.value,
             "detector_intercept": True
         }
+    )
     event = process_and_ingest_event(event_in, actor=current_user.email)
 
     # Dispatch immediate Amazon SNS Security Alert to Admin
