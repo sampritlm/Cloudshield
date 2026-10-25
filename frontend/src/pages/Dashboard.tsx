@@ -168,24 +168,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigateTab }) => {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Live Sync Status Pill */}
-          <button
-            onClick={() => setIsLiveActive(!isLiveActive)}
-            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all ${
-              isLiveActive
-                ? 'bg-emerald-50 border-emerald-300 text-emerald-800 shadow-xs hover:bg-emerald-100'
-                : 'bg-slate-100 border-slate-300 text-slate-600 hover:bg-slate-200'
-            }`}
-            title={isLiveActive ? "Auto-syncing every 2.5s directly with AWS DynamoDB" : "Click to resume live sync"}
-          >
-            <span className="relative flex h-2 w-2">
-              {isLiveActive && (
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              )}
-              <span className={`relative inline-flex rounded-full h-2 w-2 ${isLiveActive ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
-            </span>
-            <span className="font-mono tracking-tight">{isLiveActive ? 'REAL-TIME LIVE (2.5s)' : 'PAUSED'}</span>
-          </button>
 
           <button
             onClick={handleRefresh}
