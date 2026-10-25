@@ -84,8 +84,8 @@ export const UserResources: React.FC<Props> = ({ onNavigateTab }) => {
         setTimeout(() => setRecentlyDownloaded(null), 5000);
       } else {
         // Access Denied by detector on restricted resource
-        setAccessDeniedNotice(`Access Denied: You do not have permission to download "${resource.title}". Unauthorized access attempts are monitored and recorded.`);
-        setTimeout(() => setAccessDeniedNotice(null), 7000);
+        setAccessDeniedNotice(`🚨 SECURITY ALERT: Unauthorized attempt to download restricted asset "${resource.title}" was intercepted by CloudShield Threat Detector. An urgent Incident was created and an Amazon SNS security alert has been dispatched to the Administrator.`);
+        setTimeout(() => setAccessDeniedNotice(null), 10000);
 
         // Instant real-time broadcast across Admin and User portals
         window.dispatchEvent(new CustomEvent('cloudshield:notification-update'));

@@ -731,12 +731,31 @@ async def download_resource_file(
         )
         event = process_and_ingest_event(event_in, actor=current_user.email)
 
-        # 2. Return HTTP 403 with full threat detection metadata
+        # 2. Dispatch immediate Amazon SNS Security Alert to Admin
+        from app.aws.sns_handler import publish_unauthorized_access_alert
+        sns_dispatch = publish_unauthorized_access_alert(
+            user_email=current_user.email,
+            resource_title=resource.get("title", resource["file_name"]),
+            resource_path=target_path,
+            client_ip="192.168.1.100",
+            incident_id=event.incident_id
+        )
+
+        # Update incident record with SNS delivery status
+        if event.incident_id:
+            from app.storage import get_storage
+            st = get_storage()
+            inc = st.get_incident(event.incident_id)
+            if inc:
+                inc.notified_via_sns = True
+                st.save_incident(inc)
+
+        # 3. Return HTTP 403 with full threat detection metadata
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "status": "ACCESS_INTERCEPTED_BY_DETECTOR",
-                "message": f"CloudShield Threat Detector intercepted unauthorized download attempt targeting restricted asset '{resource['title']}'.",
+                "message": f"CloudShield Threat Detector intercepted unauthorized download attempt targeting restricted asset '{resource['title']}'. An urgent alert and Amazon SNS notification have been dispatched to the Administrator.",
                 "threat_detected": True,
                 "rule_code": "RULE_03",
                 "rule_name": "Unauthorized Resource Access",
@@ -750,7 +769,8 @@ async def download_resource_file(
                 "target_file": resource["file_name"],
                 "required_role": resource.get("required_role", "admin"),
                 "user_identity": current_user.email,
-                "added_to_threat_thread": True
+                "sns_notified": True,
+                "sns_message_id": sns_dispatch.get("message_id")
             }
         )
 
@@ -1345,12 +1365,29 @@ async def access_corporate_resource(
             "user_role": current_user.role.value,
             "detector_intercept": True
         }
-    )
     event = process_and_ingest_event(event_in, actor=current_user.email)
+
+    # Dispatch immediate Amazon SNS Security Alert to Admin
+    from app.aws.sns_handler import publish_unauthorized_access_alert
+    sns_dispatch = publish_unauthorized_access_alert(
+        user_email=current_user.email,
+        resource_title=resource_entry.get("name", target_path) if resource_entry else target_path,
+        resource_path=target_path,
+        client_ip=client_ip,
+        incident_id=event.incident_id
+    )
+
+    if event.incident_id:
+        from app.storage import get_storage
+        st = get_storage()
+        inc = st.get_incident(event.incident_id)
+        if inc:
+            inc.notified_via_sns = True
+            st.save_incident(inc)
 
     return {
         "status": "ACCESS_INTERCEPTED_BY_DETECTOR",
-        "message": f"CloudShield Detector intercepted unauthorized access attempt targeting '{target_path}'.",
+        "message": f"CloudShield Detector intercepted unauthorized access attempt targeting '{target_path}'. An urgent Amazon SNS alert has been dispatched to the Administrator.",
         "detected_as_threat": True,
         "rule_code": "RULE_03",
         "rule_name": "Unauthorized Resource",

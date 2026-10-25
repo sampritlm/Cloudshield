@@ -76,6 +76,56 @@ def publish_alert_to_sns(incident: Incident) -> Dict[str, Any]:
             "error": str(e)
         }
 
+def publish_unauthorized_access_alert(
+    user_email: str,
+    resource_title: str,
+    resource_path: str,
+    client_ip: str,
+    incident_id: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Sends an immediate urgent security alert to the admin via Amazon SNS whenever an unauthorized resource or restricted file is attempted.
+    """
+    subject = f"[CloudShield URGENT] Unauthorized Access Attempt by {user_email}"[:98]
+    body = (
+        f"CLOUDSHIELD SECURITY OPERATIONS ALERT\n"
+        f"=====================================\n"
+        f"EVENT TYPE   : Unauthorized Restricted File / Resource Access Attempt\n"
+        f"RULE CODE    : RULE_03 (Unauthorized Resource Access)\n"
+        f"SEVERITY     : HIGH (Risk Score: 75/100)\n"
+        f"USER IDENTITY: {user_email}\n"
+        f"RESOURCE     : {resource_title} ({resource_path})\n"
+        f"SOURCE IP    : {client_ip}\n"
+        f"INCIDENT ID  : {incident_id or 'Auto-created in DynamoDB'}\n\n"
+        f"DETECTION ACTION : Intercepted by CloudShield Automated Threat Evaluator.\n"
+        f"RECOMMENDED ACTION: Inspect user credentials and review IAM access policies."
+    )
+    if not settings.AWS_MODE or not settings.SNS_ALERT_TOPIC_ARN:
+        logger.info(f"[SIMULATED SNS] Unauthorized access alert for {user_email} on {resource_path}")
+        return {"mode": "SIMULATED", "status": "SENT_SIMULATED", "subject": subject}
+
+    client = get_boto3_client("sns")
+    if not client:
+        return {"mode": "ERROR", "error": "SNS client unavailable"}
+
+    try:
+        response = client.publish(
+            TopicArn=settings.SNS_ALERT_TOPIC_ARN,
+            Subject=subject,
+            Message=body
+        )
+        msg_id = response.get("MessageId")
+        logger.info(f"Published direct unauthorized access alert to SNS {settings.SNS_ALERT_TOPIC_ARN}: {msg_id}")
+        return {
+            "mode": "AWS_SNS",
+            "status": "PUBLISHED",
+            "topic_arn": settings.SNS_ALERT_TOPIC_ARN,
+            "message_id": msg_id
+        }
+    except Exception as e:
+        logger.error(f"SNS publish failed for unauthorized access: {e}")
+        return {"mode": "ERROR", "error": str(e)}
+
 def subscribe_email_to_sns(email: str) -> Dict[str, Any]:
     """
     Subscribes a Gmail or corporate email address to the CloudShield Amazon SNS topic.

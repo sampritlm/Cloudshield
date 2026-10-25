@@ -445,7 +445,7 @@ export const api = {
 
   downloadResourceFile: async (resourceId: string): Promise<{ success: boolean; filename?: string; threat?: any }> => {
     const url = `${API_BASE}/user/portal/library/resources/${resourceId}/download`;
-    const token = localStorage.getItem('token');
+    const token = localStorage.getItem('cloudshield_token') || localStorage.getItem('token');
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
 
