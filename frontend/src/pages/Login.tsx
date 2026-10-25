@@ -111,49 +111,11 @@ export const Login: React.FC = () => {
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md px-4 sm:px-0">
         <div className="bg-white py-8 px-6 shadow-md border border-slate-200 rounded-2xl sm:px-10 space-y-5">
           
-          {/* RULE_01 DETECTION ALERT BOX */}
-          {ruleDetail && ruleDetail.rule_triggered && (
-            <div className="p-4 rounded-xl bg-gradient-to-br from-rose-50 to-red-50 border-2 border-rose-400 text-rose-900 shadow-sm animate-in fade-in duration-300">
-              <div className="flex items-center gap-2 font-bold text-rose-800 text-xs">
-                <AlertTriangle className="w-4 h-4 text-rose-600 animate-pulse" />
-                <span className="font-mono bg-rose-200/80 px-1.5 py-0.5 rounded text-[10px] text-rose-900">
-                  {ruleDetail.rule_code} TRIGGERED
-                </span>
-                <span>{ruleDetail.rule_name} ({ruleDetail.penalty})</span>
-              </div>
-              
-              <div className="mt-2 text-xs text-rose-800 space-y-1">
-                <p className="leading-snug">
-                  <strong>Threshold Reached:</strong> {ruleDetail.failed_attempts} failed login attempts recorded within the {ruleDetail.window_seconds || 300}s sliding window.
-                </p>
-                <div className="flex items-center gap-3 pt-1 text-[11px] font-mono">
-                  <span>Risk Score: <strong>{ruleDetail.risk_score} / 100</strong></span>
-                  <span>Severity: <strong className="uppercase">{ruleDetail.severity}</strong></span>
-                </div>
-                {ruleDetail.incident_created && (
-                  <div className="pt-1 text-[11px] text-rose-900 font-semibold flex items-center gap-1.5">
-                    <Activity className="w-3.5 h-3.5 text-rose-600" />
-                    <span>Incident Enqueued to SQS: <code className="bg-white px-1 py-0.5 rounded border border-rose-300">{ruleDetail.incident_id}</code></span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Regular Warning Box (if 1 to 4 failed attempts) */}
-          {errorMessage && (!ruleDetail || !ruleDetail.rule_triggered) && (
-            <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1">
-              <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <span>{errorMessage}</span>
-              </div>
-              {ruleDetail && ruleDetail.failed_attempts && (
-                <div className="text-[11px] text-amber-700 pl-6 flex items-center gap-2">
-                  <span>Failed Attempts in Window: <strong>{ruleDetail.failed_attempts} of {ruleDetail.threshold || 5}</strong></span>
-                  <span className="text-amber-500">&bull;</span>
-                  <span>RULE_01 activates at 5</span>
-                </div>
-              )}
+          {/* Clean Error Message */}
+          {errorMessage && (
+            <div className="p-2.5 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-center gap-2 animate-in fade-in">
+              <AlertCircle className="w-4 h-4 text-rose-500 shrink-0" />
+              <span>{errorMessage.split('.')[0] || 'Invalid credentials. Please verify your email and password.'}</span>
             </div>
           )}
 

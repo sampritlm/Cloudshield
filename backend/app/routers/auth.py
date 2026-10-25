@@ -67,8 +67,7 @@ async def login_json(credentials: UserCredentials, request: Request):
             or total_failed >= settings.FAILED_LOGIN_THRESHOLD
         )
 
-        rule_suffix = f" RULE_01 Repeated Failed Login (+40 pts) triggered! Incident: {event.incident_id}." if is_rule_triggered else f" Failed attempts: {total_failed}/{settings.FAILED_LOGIN_THRESHOLD}."
-        detail_msg = f"Invalid credentials. Please verify your email and password.{rule_suffix}"
+        detail_msg = "Invalid credentials. Please verify your email and password."
 
         headers = {
             "WWW-Authenticate": "Bearer",
