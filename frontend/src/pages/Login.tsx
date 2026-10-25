@@ -5,27 +5,16 @@ import {
   Mail,
   AlertCircle,
   ArrowRight,
-  ShieldCheck,
-  KeyRound,
-  AlertTriangle,
-  Zap,
-  Activity,
-  CheckCircle2,
-  Clock,
-  Sparkles,
-  Server
+  KeyRound
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
 
 export const Login: React.FC = () => {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSimulatingBurst, setIsSimulatingBurst] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [ruleDetail, setRuleDetail] = useState<any | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,59 +25,22 @@ export const Login: React.FC = () => {
 
     setIsLoading(true);
     setErrorMessage(null);
-    setRuleDetail(null);
 
     try {
       await login(email.trim(), password);
     } catch (err: any) {
       const msg = err.message || 'Authentication failed. Please check credentials.';
       setErrorMessage(msg);
-      if (err.data) {
-        setRuleDetail(err.data);
-      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSimulateBruteForceBurst = async () => {
-    const targetEmail = email.trim() || 'test.victim@corp.internal';
-    setEmail(targetEmail);
-    setIsSimulatingBurst(true);
-    setErrorMessage(null);
-    setRuleDetail(null);
-
-    try {
-      const res = await api.simulateFailedLoginBurst(targetEmail);
-      setRuleDetail({
-        message: `Simulated 5 consecutive failed login attempts for ${targetEmail}.`,
-        failed_attempts: 5,
-        threshold: 5,
-        window_seconds: 300,
-        rule_triggered: true,
-        rule_code: 'RULE_01',
-        rule_name: 'Repeated Failed Login',
-        penalty: '+40 pts',
-        risk_score: res.risk_score,
-        severity: res.severity,
-        incident_created: res.incident_created,
-        incident_id: res.incident_id,
-        event_id: res.event_id,
-        reasons: res.detection_reasons
-      });
-      setErrorMessage(`RULE_01 Triggered: 5 failed authentications recorded within 300-second window.`);
-    } catch (err: any) {
-      setErrorMessage(`Simulation error: ${err.message}`);
-    } finally {
-      setIsSimulatingBurst(false);
-    }
-  };
 
   const handleQuickFill = (demoEmail: string, demoPass: string) => {
     setEmail(demoEmail);
     setPassword(demoPass);
     setErrorMessage(null);
-    setRuleDetail(null);
   };
 
   return (
@@ -160,7 +112,7 @@ export const Login: React.FC = () => {
 
             <button
               type="submit"
-              disabled={isLoading || isSimulatingBurst}
+              disabled={isLoading}
               className="w-full flex items-center justify-center gap-2 py-2.5 px-4 rounded-lg bg-navy-900 hover:bg-navy-800 text-white text-sm font-semibold shadow transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-navy-900 disabled:opacity-50"
             >
               {isLoading ? (
@@ -174,30 +126,6 @@ export const Login: React.FC = () => {
             </button>
           </form>
 
-          {/* 1-Click RULE_01 Simulation Button */}
-          <div className="pt-2">
-            <button
-              type="button"
-              onClick={handleSimulateBruteForceBurst}
-              disabled={isSimulatingBurst || isLoading}
-              className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-amber-50 to-rose-50 border border-rose-200 hover:border-rose-300 text-rose-900 hover:text-rose-950 text-xs font-semibold flex items-center justify-center gap-2 transition-all shadow-sm"
-            >
-              {isSimulatingBurst ? (
-                <>
-                  <div className="w-3.5 h-3.5 border-2 border-rose-600 border-t-transparent rounded-full animate-spin" />
-                  <span>Evaluating 5 Failed Logins...</span>
-                </>
-              ) : (
-                <>
-                  <Zap className="w-3.5 h-3.5 text-amber-600 fill-current" />
-                  <span>⚡ Test RULE_01 Detector (Trigger 5x Failed Logins)</span>
-                </>
-              )}
-            </button>
-            <div className="text-[10px] text-slate-500 text-center mt-1">
-              Sends 5 consecutive authentication failures to verify live RULE_01 detection &amp; incident creation (+40 pts)
-            </div>
-          </div>
 
           {/* Quick Demo Credentials Fill */}
           <div className="mt-4 pt-4 border-t border-slate-200">
