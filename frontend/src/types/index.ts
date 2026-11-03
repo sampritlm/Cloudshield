@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'analyst' | 'user';
+export type UserRole = 'admin' | 'analyst' | 'user' | 'honeypot';
 
 export type SeverityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 
@@ -103,7 +103,8 @@ export type SimulatorScenario =
   | 'UNUSUAL_IP'
   | 'UNAUTHORIZED_ACCESS'
   | 'HIGH_REQUEST_FREQUENCY'
-  | 'COMBINED_SUSPICIOUS';
+  | 'COMBINED_SUSPICIOUS'
+  | 'HONEYPOT_TRIGGERED';
 
 export interface ThreatSimulatorRequest {
   scenario: SimulatorScenario;
@@ -355,5 +356,27 @@ export interface UserNotificationItem {
   type: 'SIMULATION' | 'TRAINING' | 'SECURITY_ALERT' | 'INFO';
   timestamp: string;
   read: boolean;
+}
+
+export interface HoneypotDecoyInfo {
+  id: string;
+  name: string;
+  endpoint: string;
+  category: string;
+  description: string;
+  risk_points: number;
+  threat_level: string;
+  total_hits: number;
+  last_hit_at?: string | null;
+}
+
+export interface HoneypotStatusResponse {
+  enabled: boolean;
+  total_traps_active: number;
+  total_hits_recorded: number;
+  trapped_ips_count: number;
+  recent_trapped_ips: string[];
+  decoys: HoneypotDecoyInfo[];
+  latest_incident_id?: string | null;
 }
 

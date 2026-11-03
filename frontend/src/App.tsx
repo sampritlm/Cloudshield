@@ -14,6 +14,7 @@ import { Reports } from './pages/Reports';
 import { AdminUsers } from './pages/admin/AdminUsers';
 import { AdminSettings } from './pages/admin/AdminSettings';
 import { ThreatSimulator } from './pages/ThreatSimulator';
+import { HoneypotMonitor } from './pages/HoneypotMonitor';
 
 // Normal User Pages (Final 5 Structure)
 import { UserDashboard } from './pages/user/UserDashboard';
@@ -22,6 +23,7 @@ import { UserMail } from './pages/user/UserMail';
 import { UserNotifications } from './pages/user/UserNotifications';
 import { UserProfilePage } from './pages/user/UserProfilePage';
 import { UserRuleSandbox } from './pages/user/UserRuleSandbox';
+import { DecoyDashboard } from './pages/DecoyDashboard';
 
 const MainLayout: React.FC = () => {
   const { user, isAdmin, isLoading } = useAuth();
@@ -119,6 +121,11 @@ const MainLayout: React.FC = () => {
     return <Login />;
   }
 
+  // Deflect Honeypot Trap logins to Decoy Sandbox Dashboard (100% Isolated)
+  if (user.role === 'honeypot' || user.email === 'admin-trap@cloudshield.internal') {
+    return <DecoyDashboard />;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <Navbar
@@ -148,6 +155,11 @@ const MainLayout: React.FC = () => {
           {currentTab === 'simulator' && (
             <ThreatSimulator
               onNavigateToEvents={() => setCurrentTab('events')}
+              onNavigateToIncidents={() => setCurrentTab('incidents')}
+            />
+          )}
+          {currentTab === 'honeypot' && (
+            <HoneypotMonitor
               onNavigateToIncidents={() => setCurrentTab('incidents')}
             />
           )}

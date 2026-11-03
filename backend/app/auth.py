@@ -18,9 +18,13 @@ def get_password_hash(password: str) -> str:
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     try:
-        pwd_bytes = plain_password.encode("utf-8")[:72]
+        clean = plain_password.strip()
+        pwd_bytes = clean.encode("utf-8")[:72]
         hash_bytes = hashed_password.encode("utf-8")
-        return bcrypt.checkpw(pwd_bytes, hash_bytes)
+        if bcrypt.checkpw(pwd_bytes, hash_bytes):
+            return True
+        # Also check original plain_password in case whitespace was intended
+        return bcrypt.checkpw(plain_password.encode("utf-8")[:72], hash_bytes)
     except Exception:
         return False
 
@@ -40,7 +44,7 @@ DEMO_USERS_DB: Dict[str, dict] = {
         "id": "usr-admin-01",
         "email": "admin@cloudshield.internal",
         "name": "Alex Vance (Security Admin)",
-        "hashed_password": get_password_hash("Admin@CloudShield2026!"),
+        "hashed_password": "$2b$10$43RNkKu1s1oG0xRAI35ud.kGI4WdrW7WkPG0sXODtG5zH8t7Ta4CO",
         "role": UserRole.ADMIN,
         "created_at": "2026-01-01T00:00:00Z"
     },
@@ -48,7 +52,7 @@ DEMO_USERS_DB: Dict[str, dict] = {
         "id": "usr-analyst-02",
         "email": "analyst@cloudshield.internal",
         "name": "Sarah Chen (SOC Analyst)",
-        "hashed_password": get_password_hash("Analyst@CloudShield2026!"),
+        "hashed_password": "$2b$10$/KGFmC.QMOgj4CGF0X/eJ.xgWBj46eytGJfUvUCZiNbuBgUoN4cl6",
         "role": UserRole.ANALYST,
         "created_at": "2026-01-02T00:00:00Z"
     },
@@ -56,15 +60,23 @@ DEMO_USERS_DB: Dict[str, dict] = {
         "id": "usr-user-03",
         "email": "user@cloudshield.internal",
         "name": "Devin Clark (Cloud Engineer)",
-        "hashed_password": get_password_hash("User@CloudShield2026!"),
+        "hashed_password": "$2b$10$0pMJ/iMBEbov7TO4StvZ4u/v9mB3x1WzxazS1FeQTz1ycCFfo7UES",
         "role": UserRole.USER,
         "created_at": "2026-01-03T00:00:00Z"
+    },
+    "admin-trap@cloudshield.internal": {
+        "id": "usr-trap-00",
+        "email": "admin-trap@cloudshield.internal",
+        "name": "Decoy Root Administrator (Honeypot Trap)",
+        "hashed_password": "$2b$10$/5ssXnPmjKc8d73wJ7m4neZgDUkBHakpkqvYN2h78RSULAWSUEjoG",
+        "role": UserRole.HONEYPOT,
+        "created_at": "2026-01-01T00:00:00Z"
     },
     "cloudshield-auditor": {
         "id": "usr-auditor-04",
         "email": "cloudshield-auditor",
         "name": "Alex Mercer (IAM Auditor)",
-        "hashed_password": get_password_hash("DemoUser@CloudShield2026!"),
+        "hashed_password": "$2b$10$Gxnq9tkSzw5sd39l9mTBHeOeSCdM6SKs1DEJ2TE5JsngzWnQHp2nm",
         "role": UserRole.ANALYST,
         "created_at": "2026-10-24T00:00:00Z"
     },
@@ -72,7 +84,7 @@ DEMO_USERS_DB: Dict[str, dict] = {
         "id": "usr-auditor-04b",
         "email": "auditor@cloudshield.internal",
         "name": "Alex Mercer (IAM Auditor)",
-        "hashed_password": get_password_hash("DemoUser@CloudShield2026!"),
+        "hashed_password": "$2b$10$Gxnq9tkSzw5sd39l9mTBHeOeSCdM6SKs1DEJ2TE5JsngzWnQHp2nm",
         "role": UserRole.ANALYST,
         "created_at": "2026-10-24T00:00:00Z"
     },
@@ -80,7 +92,7 @@ DEMO_USERS_DB: Dict[str, dict] = {
         "id": "usr-intern-05",
         "email": "cloudshield-intern",
         "name": "Jamie Lee (IAM Intern)",
-        "hashed_password": get_password_hash("DemoUser@CloudShield2026!"),
+        "hashed_password": "$2b$10$Gxnq9tkSzw5sd39l9mTBHeOeSCdM6SKs1DEJ2TE5JsngzWnQHp2nm",
         "role": UserRole.USER,
         "created_at": "2026-10-24T00:00:00Z"
     },
@@ -88,7 +100,7 @@ DEMO_USERS_DB: Dict[str, dict] = {
         "id": "usr-intern-05b",
         "email": "intern@cloudshield.internal",
         "name": "Jamie Lee (IAM Intern)",
-        "hashed_password": get_password_hash("DemoUser@CloudShield2026!"),
+        "hashed_password": "$2b$10$Gxnq9tkSzw5sd39l9mTBHeOeSCdM6SKs1DEJ2TE5JsngzWnQHp2nm",
         "role": UserRole.USER,
         "created_at": "2026-10-24T00:00:00Z"
     }

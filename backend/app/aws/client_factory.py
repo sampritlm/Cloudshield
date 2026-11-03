@@ -6,12 +6,12 @@ from app.config import settings
 
 logger = logging.getLogger("cloudshield.aws")
 
-def get_boto3_client(service_name: str) -> Optional[Any]:
+def get_boto3_client(service_name: str, force: bool = False) -> Optional[Any]:
     """
     Safely creates and returns a boto3 client for the given AWS service.
-    Returns None if AWS_MODE is False or if valid AWS credentials are not configured.
+    Returns None if AWS_MODE is False (unless force=True) or if valid AWS credentials are not configured.
     """
-    if not settings.AWS_MODE:
+    if not settings.AWS_MODE and not force:
         return None
     try:
         client = boto3.client(service_name, region_name=settings.AWS_REGION)

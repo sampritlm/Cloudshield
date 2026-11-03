@@ -1,8 +1,21 @@
+import os
+from pathlib import Path
 from typing import List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_backend_dir = Path(__file__).resolve().parent.parent
+_env_candidates = [
+    str(_backend_dir / ".env"),
+    str(_backend_dir.parent / ".env"),
+    ".env"
+]
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=_env_candidates,
+        env_file_encoding="utf-8",
+        extra="ignore"
+    )
 
     APP_NAME: str = "CloudShield"
     APP_ENV: str = "development"
@@ -43,6 +56,9 @@ class Settings(BaseSettings):
     POINTS_UNUSUAL_IP: int = 25
     POINTS_UNAUTHORIZED_ACCESS: int = 45
     POINTS_HIGH_REQUEST_FREQ: int = 35
+    POINTS_HONEYPOT_TRIGGERED: int = 90
+    POINTS_HONEYPOT_TRIGGER: int = 85
+    HONEYPOT_TRAP_EMAIL: str = "admin-trap@cloudshield.internal"
 
     FAILED_LOGIN_THRESHOLD: int = 5
     FAILED_LOGIN_WINDOW_SECONDS: int = 300
@@ -63,6 +79,24 @@ class Settings(BaseSettings):
         "/database/backup/master.sql",
         "s3://corp-confidential/keys",
         "/var/secrets/tokens"
+    ]
+
+    HONEYPOT_DECOY_PATHS: List[str] = [
+        "/.env",
+        "/api/v1/internal/aws-keys",
+        "/api/v1/admin/db-backup",
+        "/actuator/env",
+        "/api/v1/system/debug-credentials",
+        "/api/v1/secrets/master-key",
+        "/wp-config.php",
+        "/phpmyadmin"
+    ]
+
+    HONEYTOKEN_ACCOUNTS: List[str] = [
+        "canary.admin@cloudshield.internal",
+        "honeytoken.root@corp.internal",
+        "root@cloudshield.internal",
+        "decoy.backup@corp.internal"
     ]
 
 settings = Settings()

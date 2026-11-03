@@ -30,7 +30,7 @@ export const Login: React.FC = () => {
     setErrorMessage(null);
 
     try {
-      await login(email.trim(), password);
+      await login(email.trim(), password.trim());
     } catch (err: any) {
       const msg = err.message || 'Authentication failed. Please check credentials.';
       setErrorMessage(msg);
@@ -149,47 +149,25 @@ export const Login: React.FC = () => {
               <KeyRound className="w-3.5 h-3.5 text-slate-500" />
               <span>Seminar Evaluation Roles (Click to Quick-Fill):</span>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
               <button
                 type="button"
-                onClick={() => handleQuickFill('admin@cloudshield.internal', 'Admin@CloudShield2026!')}
-                className="p-2 text-left bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors"
+                onClick={() => handleQuickFill('admin@cloudshield.internal', 'Password123!')}
+                className="p-2.5 text-left bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors group"
               >
-                <div className="font-semibold text-slate-900">Administrator</div>
+                <div className="font-semibold text-slate-900 group-hover:text-sky-600 transition-colors">Security Administrator</div>
                 <div className="text-[11px] text-slate-600 truncate">admin@cloudshield.internal</div>
+                <div className="text-[10px] text-slate-500 font-medium mt-0.5">Cloud Security Console</div>
               </button>
 
               <button
                 type="button"
                 onClick={() => handleQuickFill('user@cloudshield.internal', 'User@CloudShield2026!')}
-                className="p-2 text-left bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors"
+                className="p-2.5 text-left bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors group"
               >
-                <div className="font-semibold text-slate-900">Normal User</div>
+                <div className="font-semibold text-slate-900 group-hover:text-sky-600 transition-colors">Normal User</div>
                 <div className="text-[11px] text-slate-600 truncate">user@cloudshield.internal</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickFill('auditor@cloudshield.internal', 'DemoUser@CloudShield2026!')}
-                className="p-2 text-left bg-indigo-50/70 hover:bg-indigo-100/70 border border-indigo-200 rounded-lg transition-colors"
-              >
-                <div className="font-semibold text-indigo-950 flex items-center gap-1">
-                  <span>IAM Auditor</span>
-                  <span className="text-[9px] bg-indigo-200 text-indigo-800 px-1 rounded">S3 Audit</span>
-                </div>
-                <div className="text-[11px] text-indigo-700 truncate">auditor@cloudshield.internal</div>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleQuickFill('intern@cloudshield.internal', 'DemoUser@CloudShield2026!')}
-                className="p-2 text-left bg-amber-50/70 hover:bg-amber-100/70 border border-amber-200 rounded-lg transition-colors"
-              >
-                <div className="font-semibold text-amber-950 flex items-center gap-1">
-                  <span>IAM Intern</span>
-                  <span className="text-[9px] bg-amber-200 text-amber-800 px-1 rounded">Public Only</span>
-                </div>
-                <div className="text-[11px] text-amber-700 truncate">intern@cloudshield.internal</div>
+                <div className="text-[10px] text-slate-500 font-medium mt-0.5">Employee Awareness Portal</div>
               </button>
             </div>
           </div>

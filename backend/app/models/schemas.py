@@ -6,6 +6,7 @@ class UserRole(str, Enum):
     ADMIN = "admin"
     ANALYST = "analyst"
     USER = "user"
+    HONEYPOT = "honeypot"
 
 class SeverityLevel(str, Enum):
     LOW = "LOW"
@@ -265,6 +266,7 @@ class SimulatorScenario(str, Enum):
     UNAUTHORIZED_ACCESS = "UNAUTHORIZED_ACCESS"
     HIGH_REQUEST_FREQUENCY = "HIGH_REQUEST_FREQUENCY"
     COMBINED_SUSPICIOUS = "COMBINED_SUSPICIOUS"
+    HONEYPOT_TRIGGERED = "HONEYPOT_TRIGGERED"
 
 class ThreatSimulatorRequest(BaseModel):
     scenario: SimulatorScenario
@@ -320,4 +322,32 @@ class UserAccessActionResponse(BaseModel):
     duration_minutes: Optional[int] = None
     updated_at: str
     updated_by: str
+
+# Honeypot & Deception Technology Models
+class HoneypotDecoyInfo(BaseModel):
+    id: str
+    name: str
+    endpoint: str
+    category: str
+    description: str
+    risk_points: int
+    threat_level: str
+    total_hits: int = 0
+    last_hit_at: Optional[str] = None
+
+class HoneypotTriggerTestRequest(BaseModel):
+    decoy_id: Optional[str] = "DECOY_AWS_KEYS"
+    source_ip: Optional[str] = "198.51.100.77"
+    simulated_scanner: Optional[str] = "Hydra/ReconScanner-v2"
+    custom_endpoint: Optional[str] = None
+
+class HoneypotStatusResponse(BaseModel):
+    enabled: bool = True
+    total_traps_active: int
+    total_hits_recorded: int
+    trapped_ips_count: int
+    recent_trapped_ips: List[str] = Field(default_factory=list)
+    decoys: List[HoneypotDecoyInfo] = Field(default_factory=list)
+    latest_incident_id: Optional[str] = None
+
 

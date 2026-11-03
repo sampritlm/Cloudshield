@@ -3,8 +3,8 @@ import json
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any, Set
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.responses import FileResponse, Response
 
 from app.auth import get_current_user, UserProfile, verify_password, get_password_hash, DEMO_USERS_DB
 from app.storage import get_storage
@@ -27,6 +27,9 @@ class UserPreferencesRequest(BaseModel):
     email_alerts: Optional[bool] = True
     simulation_summaries: Optional[bool] = True
     training_reminders: Optional[bool] = True
+
+class UnlockResourceRequest(BaseModel):
+    passcode: str
 
 INITIAL_LESSONS = [
     {
@@ -676,6 +679,34 @@ DOWNLOADABLE_RESOURCES = [
         "last_updated": "2026-03-16",
         "restricted": True,
         "required_role": "admin"
+    },
+    {
+        "id": "res-vault-passwords-txt",
+        "title": "Corporate Master Passwords & AWS Access Keys Vault",
+        "category": "Password & MFA",
+        "description": "Restricted departmental credential vault storing AWS IAM root keys, production Aurora DB passwords, and VPN tokens.",
+        "file_name": "Corporate_Master_Passwords_Vault.txt",
+        "file_type": "PDF",
+        "file_size": "2.4 KB",
+        "badge": "Restricted Vault",
+        "version": "v3.1-SECRET",
+        "last_updated": "2026-11-01",
+        "restricted": True,
+        "required_role": "admin"
+    },
+    {
+        "id": "res-audit-financial-xlsx",
+        "title": "Internal Financial Ledger & Infrastructure Security Audit 2026",
+        "category": "Reference Materials",
+        "description": "Confidential internal compliance audit detailing executive compensation, unpatched servers, and network topology vulnerabilities.",
+        "file_name": "CloudShield_Q4_Financial_Security_Audit.xlsx",
+        "file_type": "XLSX",
+        "file_size": "3.8 KB",
+        "badge": "Confidential Audit",
+        "version": "2026-Q4-AUDIT",
+        "last_updated": "2026-10-28",
+        "restricted": True,
+        "required_role": "admin"
     }
 ]
 
@@ -688,24 +719,357 @@ async def get_downloadable_resources(current_user: UserProfile = Depends(get_cur
     """
     return DOWNLOADABLE_RESOURCES
 
+RESTRICTED_RESOURCE_PASSCODES = {
+    "adminaccess2026",
+    "adminaccess2026!",
+    "adminaccess",
+    "adminaccess@2026"
+}
+EASY_CRACK_PASSCODES = RESTRICTED_RESOURCE_PASSCODES
+
+# =============================================================================
+# Rich Structured Previews for All Allowed and Reference Documents
+# =============================================================================
+RESOURCE_PREVIEWS = {
+    "res-phish-guide-pdf": {
+        "document_type": "guide",
+        "title": "CloudShield Phishing Identification Guide",
+        "summary": "Comprehensive enterprise reference guide detailing modern email-based social engineering, technical header analysis, typosquatting domains, and actionable reporting workflows.",
+        "sections": [
+            {
+                "heading": "1. Modern Phishing Tactics & Social Engineering",
+                "text": "Cybercriminals increasingly deploy hyper-targeted spear-phishing campaigns leveraging organizational hierarchies, publicly available vendor relationships, and AI-assisted pretexting. Unlike traditional spam, modern deceptive communications mirror internal corporate templates and replicate executive communication styles to induce immediate compliance."
+            },
+            {
+                "heading": "2. Technical Header Inspection Protocols",
+                "text": "Every suspicious email must be analyzed across three core cryptographic authentication vectors:\n• SPF (Sender Policy Framework): Validates whether the transmitting server's IP address is explicitly authorized in the sender domain's DNS SPF record.\n• DKIM (DomainKeys Identified Mail): Uses public-key cryptography to verify message integrity and confirm that the body has not been modified in transit.\n• DMARC (Domain-based Message Authentication): Enforces organizational policy (none, quarantine, or reject) when SPF or DKIM checks fail alignment."
+            },
+            {
+                "heading": "3. Domain Spoofing & URL Deception Techniques",
+                "text": "Attackers deploy sophisticated domain masking tactics:\n• Typosquatting: Substituting visually identical characters (e.g., lowercase 'l' with numeral '1', or 'rn' mimicking 'm').\n• Punycode & IDN Spoofing: Registering Internationalized Domain Names using Cyrillic or Greek homoglyphs.\n• URL Shorteners & Redirect Chains: Hiding credential harvesting destinations behind multi-hop HTTP 302 redirects.\n• Subdomain Masquerading: Crafting domains like 'cloudshield.internal.attacker-server.com' to deceive hasty users."
+            },
+            {
+                "heading": "4. Step-by-Step Reporting SOP",
+                "text": "When encountering a suspicious communication:\n1. Do NOT click hyperlinks, open attachments, or reply to the sender.\n2. Click the 'Report Phish' button on the CloudShield email ribbon.\n3. The message is automatically quarantined and dispatched to the SOC triage pipeline for automated sandbox detonation."
+            }
+        ]
+    },
+    "res-phish-checklist-docx": {
+        "document_type": "checklist",
+        "title": "Email Red Flags & Sender Verification Checklist",
+        "summary": "Operational 10-point inspection checklist for employees evaluating unexpected or sensitive incoming electronic communications.",
+        "checklist": [
+            {"item": "Sender Identity Verification", "detail": "Compare friendly display name against actual SMTP sender address in raw headers."},
+            {"item": "Orthographic Domain Check", "detail": "Inspect domain letter-by-letter to identify character substitutions or subtle misspellings."},
+            {"item": "External Sender Warning", "detail": "Verify presence of mandatory [EXTERNAL SENDER] safety warning tags."},
+            {"item": "Urgency & Psychological Coercion", "detail": "Identify artificial deadlines threatening punitive measures or missed opportunities."},
+            {"item": "Hyperlink Destination Inspection", "detail": "Hover over hyperlinks without clicking to confirm target domain matches legitimate corporate URLs."},
+            {"item": "Attachment Payload Risk", "detail": "Check for dangerous file extensions (.html, .iso, .exe, .scr, or macro-enabled .xlsm)."},
+            {"item": "Credential or MFA Token Solicitations", "detail": "Remember that IT will NEVER ask for passwords, private keys, or MFA codes via email."},
+            {"item": "Banking & Wire Transfer Redirection", "detail": "Any request to change vendor payment routing requires out-of-band voice confirmation."},
+            {"item": "Tone & Stylistic Consistency", "detail": "Verify if the writing style, signature block, and tone conform to previous authentic messages."},
+            {"item": "SOC Incident Escalation", "detail": "Submit unverified emails to soc-triage@cloudshield.internal for technical analysis."}
+        ]
+    },
+    "res-policy-acceptable-docx": {
+        "document_type": "policy",
+        "title": "Acceptable Use & Cloud Asset Protection Policy",
+        "summary": "Corporate rules and employee responsibilities regarding acceptable use of workstations, cloud infrastructure, intellectual property, and internal communication channels.",
+        "sections": [
+            {
+                "heading": "1. Corporate Asset Ownership",
+                "text": "All laptops, mobile devices, network equipment, email accounts, and digital files are the exclusive property of CloudShield Enterprise. Monitoring and auditing are continuously active without expectation of personal privacy."
+            },
+            {
+                "heading": "2. Credential Protection & Access Governance",
+                "text": "Employees must adhere to strict credential hygiene:\n• Passwords must be at least 16 characters and generated via enterprise password managers.\n• Multi-Factor Authentication (MFA) must never be bypassed or approved without explicit user action.\n• Workstations must lock automatically after 5 minutes of inactivity (Win + L)."
+            },
+            {
+                "heading": "3. Cloud Infrastructure & Secret Handling",
+                "text": "Developers and systems engineers are strictly prohibited from:\n• Committing AWS IAM keys, API secrets, or private TLS certificates to public source control repositories.\n• Storing plaintext database credentials in configuration files.\n• Uploading proprietary source code or confidential customer data into unapproved public AI services."
+            },
+            {
+                "heading": "4. Network Access & Remote Work",
+                "text": "All remote connections to internal cloud resources must traverse CloudShield corporate VPN tunnels. Accessing administrative consoles over public, unsecured Wi-Fi without VPN is a severe security violation."
+            }
+        ]
+    },
+    "res-pass-mfa-pdf": {
+        "document_type": "guide",
+        "title": "Password Security & MFA Configuration Guide",
+        "summary": "Illustrated standard for passphrase entropy, password manager adoption, and multi-factor authentication enrollment.",
+        "sections": [
+            {
+                "heading": "1. Passphrase Entropy Standards (NIST SP 800-63B)",
+                "text": "CloudShield enforces passphrase complexity adhering to NIST SP 800-63B guidelines:\n• Minimum length: 16 characters for standard users, 20 characters for cloud administrators.\n• Recommended method: 4 random dictionary words separated by hyphens (e.g., 'correct-horse-battery-staple').\n• Never reuse passwords across corporate and personal accounts."
+            },
+            {
+                "heading": "2. Multi-Factor Authentication Hierarchy",
+                "text": "• Tier 1 (Mandatory for Admins): FIDO2 / WebAuthn Hardware Keys (YubiKey 5 Series).\n• Tier 2 (Standard Employees): App-based TOTP (Google/Microsoft Authenticator) rotating every 30 seconds.\n• Phased Out: SMS and Voice OTP are strictly forbidden due to SS7 interception and SIM-swap exploits."
+            },
+            {
+                "heading": "3. Emergency Backup Codes & Recovery",
+                "text": "Upon MFA setup, generate a set of 10 emergency one-time recovery scratch codes. Store these codes in a physical secure safe or encrypted offline storage. Never store backup codes in unencrypted text files."
+            }
+        ]
+    },
+    "res-pass-token-docx": {
+        "document_type": "instructions",
+        "title": "Hardware Token & Authenticator Instructions",
+        "summary": "Walkthrough for configuring YubiKey 5 hardware security tokens and mobile TOTP authenticator applications.",
+        "sections": [
+            {
+                "heading": "1. Hardware Key Provisioning",
+                "text": "1. Insert the YubiKey into an available USB port.\n2. Navigate to CloudShield User Portal -> Security Settings -> Register Security Key.\n3. Touch the gold contact sensor when the browser prompt appears.\n4. Set a 6-digit hardware User PIN to enforce two-factor biometric verification."
+            },
+            {
+                "heading": "2. Mobile TOTP Authenticator Pairing",
+                "text": "1. Open Google Authenticator or Microsoft Authenticator on your mobile device.\n2. Tap '+' and select 'Scan QR Code'.\n3. Scan the provisioning barcode displayed on the CloudShield IAM portal.\n4. Enter the 6-digit verification code to confirm synchronization."
+            },
+            {
+                "heading": "3. Clock Drift Troubleshooting",
+                "text": "If generated TOTP codes are rejected, your device clock may be desynchronized. Ensure your mobile settings are set to 'Automatic Network Time'. A clock drift exceeding 30 seconds will cause authentication failures."
+            }
+        ]
+    },
+    "res-train-slides-pptx": {
+        "document_type": "presentation",
+        "title": "CloudShield Security Awareness Training Presentation",
+        "summary": "Executive slide deck for Q1 2026 enterprise cybersecurity awareness training covering cloud perimeter defense, zero trust, and social engineering.",
+        "slides": [
+            {
+                "slide": 1,
+                "title": "CloudShield Cyber Defense Architecture 2026",
+                "subtitle": "Building Human Firewalls & Resilient Cloud Operations",
+                "points": [
+                    "Presenter: Alex Vance (Head of Information Security)",
+                    "Audience: All CloudShield Staff & Engineering Teams",
+                    "Mandatory SOC 2 / ISO 27001 Compliance Training"
+                ]
+            },
+            {
+                "slide": 2,
+                "title": "The Modern Threat Landscape",
+                "subtitle": "Evolving Attack Vectors in Cloud Environments",
+                "points": [
+                    "85% of successful cloud breaches originate from identity compromises and phishing.",
+                    "Surge in AI-assisted spear phishing and executive voice cloning.",
+                    "Ransomware operators targeting Amazon S3 backups and DynamoDB clusters."
+                ]
+            },
+            {
+                "slide": 3,
+                "title": "Zero Trust Principles in Practice",
+                "subtitle": "Never Trust, Always Verify",
+                "points": [
+                    "Verify explicitly across all session requests.",
+                    "Enforce Just-In-Time (JIT) and Least Privilege access.",
+                    "Assume breach: segment VPC networks to minimize lateral movement."
+                ]
+            },
+            {
+                "slide": 4,
+                "title": "Identifying Social Engineering Vectors",
+                "subtitle": "Phishing, Pretexting, Baiting, and Quishing",
+                "points": [
+                    "Spear Phishing: Tailored emails using scraped organizational context.",
+                    "Pretexting: Impersonating IT support or external compliance auditors.",
+                    "Quishing: Malicious QR codes evading traditional email security scanners."
+                ]
+            },
+            {
+                "slide": 5,
+                "title": "Endpoint & Cloud Asset Protection",
+                "subtitle": "Safeguarding Corporate Data",
+                "points": [
+                    "Full disk encryption (BitLocker 256-bit) active on all mobile endpoints.",
+                    "Zero plaintext credentials in code repositories or local drives.",
+                    "Always lock workstations when leaving your desk."
+                ]
+            },
+            {
+                "slide": 6,
+                "title": "Incident Escalation & Reporting Protocol",
+                "subtitle": "Immediate Actions When Compromise is Suspected",
+                "points": [
+                    "1. Disconnect network cable / disconnect from Wi-Fi immediately.",
+                    "2. Do NOT power off computer (preserves volatile forensic RAM).",
+                    "3. Contact SOC Hotline (+1-800-555-SECOPS) or report via portal."
+                ]
+            }
+        ]
+    },
+    "res-train-handout-pdf": {
+        "document_type": "handout",
+        "title": "Social Engineering & Phishing Tactics Handout",
+        "summary": "Visual reference handout outlining common social engineering attack vectors, defense guidelines, and emergency contact numbers.",
+        "sections": [
+            {
+                "heading": "Vector 1: Business Email Compromise (BEC)",
+                "text": "Attackers impersonate executives or trusted suppliers requesting urgent fund transfers, banking detail modifications, or employee tax records. Defense: Always enforce dual-channel verification for payment changes."
+            },
+            {
+                "heading": "Vector 2: Smishing (SMS Phishing)",
+                "text": "Text messages alerting users to fictitious delivery failures or emergency account freezes. Defense: Never tap links in SMS messages; navigate directly to official portals."
+            },
+            {
+                "heading": "Vector 3: Vishing & Voice Deepfakes",
+                "text": "Phone calls using synthesized executive voices instructing staff to bypass standard controls. Defense: Challenge the caller with internal knowledge or call them back on authorized internal extensions."
+            },
+            {
+                "heading": "Vector 4: Quishing (QR Code Attacks)",
+                "text": "QR codes placed on parking signs, café tables, or embedded in PDFs. Defense: Use camera preview to verify the actual domain before opening."
+            },
+            {
+                "heading": "Emergency Security Contacts",
+                "text": "• SOC Incident Hotline: +1 (800) 555-SECOPS\n• Email: soc-triage@cloudshield.internal\n• Security Slack Channel: #cloudshield-secops-urgent"
+            }
+        ]
+    },
+    "res-ref-hygiene-csv": {
+        "document_type": "table",
+        "title": "CloudShield Security Hygiene Audit Checklist",
+        "summary": "Structured cybersecurity hygiene controls checklist tracking verification cadence, responsible teams, and compliance scores.",
+        "table_data": {
+            "headers": ["Control ID", "Security Domain", "Control Description", "Frequency", "Owner", "Status"],
+            "rows": [
+                ["CHK-01", "Identity & Access", "Enforce Multi-Factor Authentication on all user and admin accounts", "Continuous", "Identity Ops", "COMPLIANT (100%)"],
+                ["CHK-02", "Credential Hygiene", "Minimum 16-character passphrase with zero dictionary word reuse", "Monthly", "SecOps", "COMPLIANT (98.4%)"],
+                ["CHK-03", "Phishing Resilience", "Monthly simulated phishing campaigns with CanIPhish platform", "Monthly", "Training Team", "ACTIVE (4.2% click rate)"],
+                ["CHK-04", "Network Perimeter", "Disallow direct SSH/RDP from public internet; enforce VPN tunnels", "Continuous", "Cloud Infra", "ENFORCED (0 exposed ports)"],
+                ["CHK-05", "Cloud IAM Keys", "Automated 90-day rotation and deactivation of unused IAM access keys", "Weekly", "Cloud Sec", "COMPLIANT (100%)"],
+                ["CHK-06", "Endpoint Encryption", "BitLocker XTS-AES 256-bit full disk encryption on all laptops", "Continuous", "Desktop IT", "VERIFIED (100%)"],
+                ["CHK-07", "Vulnerability Scanning", "Automated daily container and EC2 vulnerability scanning", "Daily", "DevSecOps", "ACTIVE (0 critical CVEs)"],
+                ["CHK-08", "Database Vault Access", "Database access restricted to VPC private subnets with TLS 1.3", "Continuous", "Database Ops", "ENFORCED"],
+                ["CHK-09", "Log Aggregation", "All API, auth, and network events ingested into Amazon DynamoDB", "Real-Time", "SOC Engineering", "HEALTHY"],
+                ["CHK-10", "Automated Incident Escalation", "Sub-second EventBridge routing to SQS and SNS alert topics", "Continuous", "Automation SOAR", "OPERATIONAL"]
+            ]
+        }
+    }
+}
+
+def get_decoy_payload_for_resource(resource: dict) -> dict:
+    """Constructs authentic-looking fake confidential information for restricted assets."""
+    resource_id = resource.get("id", "")
+    if "pass" in resource_id or "vault" in resource_id or "breach" in resource_id:
+        return {
+            "decoy_type": "passwords",
+            "title": resource["title"],
+            "classification": "TOP SECRET // IT OPERATIONS CREDENTIAL VAULT",
+            "last_updated": "2026-11-01T14:22:00Z",
+            "environment": "AWS ap-south-1 Production",
+            "credentials": [
+                {
+                    "system": "AWS Master Management Account (Root IAM)",
+                    "access_key_id": "AKIA_CANARY_VAULT_TRAP_KEY_1092",
+                    "secret_access_key": "7xK9pL2vM8nQ5wZ1yR4tE0aB9dC6fG3hJ2kL5mN8",
+                    "region": "ap-south-1 (Mumbai Production)",
+                    "privileges": "AdministratorAccess (Full AWS Cloud Root)"
+                },
+                {
+                    "system": "Production Aurora PostgreSQL Customer DB",
+                    "endpoint": "aurora-prod-customer-vault.internal.cloudshield.aws:5432",
+                    "master_user": "cloudshield_db_root",
+                    "master_password": "VaultDBRootPass#2026!",
+                    "schema": "customer_vault_master (24 connection pools)"
+                },
+                {
+                    "system": "Enterprise Pulse VPN & SSO Identity Gateway",
+                    "sso_portal": "https://vpn.cloudshield.internal:8443/auth/sso",
+                    "service_identity": "svc-infra-master@cloudshield.internal",
+                    "session_token": "tok_decoy_vault_8941720391827364",
+                    "scope": "Perimeter Network Bypass & Tunneling"
+                },
+                {
+                    "system": "Stripe Live Customer Payment Processing API",
+                    "secret_key": "decoy_stripe_mock_vault_key_xyz990",
+                    "webhook_secret": "decoy_whsec_mock_99812739485761029384756"
+                }
+            ],
+            "raw_text": (
+                "=== CLOUDSHIELD ENTERPRISE MASTER PASSWORDS VAULT ===\n"
+                "Classification: TOP SECRET // IT OPERATIONS VAULT\n"
+                "Last Synchronized: 2026-11-01T14:22:00Z\n\n"
+                "[AWS ROOT MASTER CREDENTIALS]\n"
+                "AWS_ACCESS_KEY_ID:     AKIA_CANARY_VAULT_TRAP_KEY_1092\n"
+                "AWS_SECRET_ACCESS_KEY: 7xK9pL2vM8nQ5wZ1yR4tE0aB9dC6fG3hJ2kL5mN8\n"
+                "AWS_DEFAULT_REGION:    ap-south-1\n\n"
+                "[PRODUCTION AURORA POSTGRESQL CLUSTER]\n"
+                "Endpoint:              aurora-prod-customer-vault.internal.cloudshield.aws:5432\n"
+                "Master User:           cloudshield_db_root\n"
+                "Master Password:       VaultDBRootPass#2026!\n"
+                "Active Schema:         customer_vault_master\n\n"
+                "[ENTERPRISE VPN & SSO GATEWAY]\n"
+                "SSO Gateway URL:       https://vpn.cloudshield.internal:8443/auth/sso\n"
+                "Service Account:       svc-infra-master@cloudshield.internal\n"
+                "Session Token:         tok_decoy_vault_8941720391827364\n\n"
+                "[PAYMENT PROCESSING API]\n"
+                "Stripe Production Key: decoy_stripe_mock_vault_key_xyz990\n"
+            ),
+            "download_filename": resource["file_name"].replace(".pdf", ".txt").replace(".docx", ".txt")
+        }
+    elif "audit" in resource_id:
+        return {
+            "decoy_type": "audit",
+            "title": resource["title"],
+            "classification": "CONFIDENTIAL FINANCIAL & INFRASTRUCTURE AUDIT",
+            "lead_auditor": "PwC Cybersecurity & Compliance Practice (Q4-2026)",
+            "audit_rows": [
+                { "department": "Executive Leadership", "budget": "$1,450,000", "pci_score": "98.2%", "unpatched_nodes": "0", "status": "COMPLIANT" },
+                { "department": "Cloud Infrastructure (ap-south-1)", "budget": "$3,200,000", "pci_score": "84.1%", "unpatched_nodes": "3 Servers (10.0.4.15, 10.0.4.22)", "status": "ACTION REQUIRED" },
+                { "department": "Customer Payment Processing Vault", "budget": "$890,000", "pci_score": "99.4%", "unpatched_nodes": "0", "status": "COMPLIANT" },
+                { "department": "R&D Staging VPC (ap-south-1)", "budget": "$620,000", "pci_score": "68.0%", "unpatched_nodes": "5 Legacy Nodes (Port 22/3389 Open)", "status": "HIGH RISK" },
+                { "department": "Internal HR & Payroll System", "budget": "$430,000", "pci_score": "91.5%", "unpatched_nodes": "1 Server (10.0.8.100)", "status": "SATISFACTORY" }
+            ],
+            "raw_text": (
+                "Department,Allocated_Budget,PCI_Compliance_Score,Unpatched_Nodes,Audit_Status\n"
+                "Executive Leadership,$1450000,98.2%,0,COMPLIANT\n"
+                "Cloud Infrastructure (ap-south-1),$3200000,84.1%,3 Servers (10.0.4.15; 10.0.4.22),ACTION REQUIRED\n"
+                "Customer Payment Processing Vault,$890000,99.4%,0,COMPLIANT\n"
+                "R&D Staging VPC (ap-south-1),$620000,68.0%,5 Legacy Nodes (Port 22/3389 Open),HIGH RISK\n"
+                "Internal HR & Payroll System,$430000,91.5%,1 Server (10.0.8.100),SATISFACTORY\n"
+            ),
+            "download_filename": resource["file_name"].replace(".xlsx", ".csv")
+        }
+    else:
+        return {
+            "decoy_type": "policy",
+            "title": resource["title"],
+            "classification": "CONFIDENTIAL CORPORATE SECURITY SOP",
+            "raw_text": (
+                f"=== {resource['title'].upper()} ===\n"
+                "Classification: RESTRICTED CORPORATE ASSET // SOC CONTROLLED\n"
+                "Standard Operating Procedure: Level 4 Elevated Access Protocol\n\n"
+                "1. Master IAM Key Provisioning: Authorized only via Hardware Security Module (HSM).\n"
+                "2. Emergency Override Seed: HMAC-SHA256: 9e8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c\n"
+                "3. Root Rotation Window: 30 calendar days.\n"
+                "4. Storage Bucket: s3://cloudshield-production-vault-ap-south-1/compliance/\n"
+            ),
+            "download_filename": resource["file_name"].replace(".pdf", ".txt").replace(".docx", ".txt")
+        }
+
 @router.get("/library/resources/{resource_id}/download")
 @router.get("/resources/{resource_id}/download")
 async def download_resource_file(
     resource_id: str,
+    passcode: Optional[str] = Query(None),
     current_user: UserProfile = Depends(get_current_user)
 ):
     """
     Authorized endpoint to download security documents.
     If the resource is restricted and user is not an admin,
-    CloudShield Threat Detection Engine actively intercepts the access under RULE_03 (+45 pts),
-    generates an incident ticket, alerts the SOC, adds to threat notifications, and returns 403.
+    a valid authorization passcode allows downloading the authentic decoy file.
+    Attempting direct download without passcode actively triggers RULE_03 (+45 pts) in the SOC.
     """
     resource = next((r for r in DOWNLOADABLE_RESOURCES if r["id"] == resource_id), None)
     if not resource:
         raise HTTPException(status_code=404, detail=f"Resource '{resource_id}' not found in library.")
 
+    # Check if a valid authorization passcode was provided
+    is_passcode_valid = bool(passcode and passcode.strip().lower() in RESTRICTED_RESOURCE_PASSCODES)
+
     # Access control enforcement:
-    if resource.get("restricted", False) and current_user.role.value != "admin":
+    if resource.get("restricted", False) and current_user.role.value != "admin" and not is_passcode_valid:
         from app.models.schemas import SecurityEventCreate
         from app.routers.events import process_and_ingest_event
 
@@ -774,18 +1138,24 @@ async def download_resource_file(
             }
         )
 
-    # If allowed, deliver the real file
+    # Deliver the real file (or decoy asset)
     file_path = os.path.join(STATIC_RESOURCES_DIR, resource["file_name"])
     if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail=f"File '{resource['file_name']}' is not available on storage.")
-    
+        # Fallback to creating a dynamic representation if file is missing
+        decoy = get_decoy_payload_for_resource(resource)
+        content = decoy.get("raw_text", f"CloudShield Enterprise Asset: {resource['title']}")
+        return Response(content=content, media_type="text/plain", headers={
+            "Content-Disposition": f"attachment; filename={resource['file_name']}"
+        })
+
     ext = os.path.splitext(resource["file_name"])[1].lower()
     media_types = {
         ".pdf": "application/pdf",
         ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        ".csv": "text/csv"
+        ".csv": "text/csv",
+        ".txt": "text/plain"
     }
     media_type = media_types.get(ext, "application/octet-stream")
     return FileResponse(
@@ -793,6 +1163,123 @@ async def download_resource_file(
         filename=resource["file_name"],
         media_type=media_type
     )
+
+@router.get("/library/resources/{resource_id}/preview")
+@router.get("/resources/{resource_id}/preview")
+async def preview_resource_document(
+    resource_id: str,
+    passcode: Optional[str] = Query(None),
+    current_user: UserProfile = Depends(get_current_user)
+):
+    """
+    Returns rich preview data for any security document in the library.
+    For allowed resources, returns detailed structured content.
+    For restricted resources, requires passcode to return decrypted decoy information.
+    """
+    resource = next((r for r in DOWNLOADABLE_RESOURCES if r["id"] == resource_id), None)
+    if not resource:
+        raise HTTPException(status_code=404, detail=f"Resource '{resource_id}' not found.")
+
+    if resource.get("restricted", False) and current_user.role.value != "admin":
+        clean_code = (passcode or "").strip().lower()
+        if clean_code not in RESTRICTED_RESOURCE_PASSCODES:
+            return {
+                "success": False,
+                "restricted": True,
+                "resource": resource,
+                "message": "Authorization passcode required to decrypt this restricted resource."
+            }
+        
+        # Valid passcode provided: return decrypted decoy asset
+        decoy = get_decoy_payload_for_resource(resource)
+        return {
+            "success": True,
+            "restricted": True,
+            "resource": resource,
+            "preview_data": decoy
+        }
+
+    # Allowed resource: return rich structured preview data
+    preview = RESOURCE_PREVIEWS.get(resource_id)
+    if not preview:
+        preview = {
+            "document_type": "guide",
+            "title": resource["title"],
+            "summary": resource["description"],
+            "sections": [
+                {
+                    "heading": "Enterprise Policy Guidance",
+                    "text": f"This document represents certified security guidelines for {resource['title']}. Compliance is strictly audited across all CloudShield cloud environments."
+                }
+            ]
+        }
+
+    return {
+        "success": True,
+        "restricted": False,
+        "resource": resource,
+        "preview_data": preview
+    }
+
+@router.post("/library/resources/{resource_id}/unlock")
+@router.post("/resources/{resource_id}/unlock")
+async def unlock_restricted_resource(
+    resource_id: str,
+    req: UnlockResourceRequest,
+    current_user: UserProfile = Depends(get_current_user)
+):
+    """
+    Decoy Authorization Endpoint for Restricted Documents (Honeypot Trap).
+    Allows passcodes ('adminaccess2026') to successfully decrypt
+    a high-value DECOY document (containing fake AWS root keys, master passwords, or audits).
+    Silently logs a CRITICAL insider threat incident into the SOC.
+    """
+    resource = next((r for r in DOWNLOADABLE_RESOURCES if r["id"] == resource_id), None)
+    if not resource:
+        raise HTTPException(status_code=404, detail=f"Resource '{resource_id}' not found.")
+
+    clean_code = req.passcode.strip().lower()
+    if clean_code not in RESTRICTED_RESOURCE_PASSCODES:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect authorization passcode. Access denied."
+        )
+
+    # 1. Silently record insider threat telemetry into SOC detection engine
+    from app.models.schemas import SecurityEventCreate
+    from app.routers.events import process_and_ingest_event
+
+    target_path = f"/resources/vault/{resource['file_name']}"
+    event_in = SecurityEventCreate(
+        event_type="HONEYPOT_TRIGGER",
+        test_user=current_user.email,
+        source_ip="192.168.1.100",
+        resource=target_path,
+        action="INSIDER_HONEYTOKEN_VAULT_UNLOCKED",
+        request_count=1,
+        raw_payload={
+            "is_honeypot": True,
+            "decoy_category": "insider_restricted_vault",
+            "resource_id": resource["id"],
+            "document_title": resource["title"],
+            "file_name": resource["file_name"],
+            "passcode_used": req.passcode.strip(),
+            "user_role": current_user.role.value,
+            "deception_type": "insider_decoy_document_unlocked",
+            "threat_classification": "INSIDER_THREAT_PRIVILEGE_BYPASS"
+        }
+    )
+    event = process_and_ingest_event(event_in, actor=current_user.email)
+
+    # 2. Construct authentic-looking decoy documents
+    decoy_payload = get_decoy_payload_for_resource(resource)
+
+    return {
+        "success": True,
+        "message": "Passcode verified. Document decrypted successfully.",
+        "resource_id": resource["id"],
+        "decoy_data": decoy_payload
+    }
 
 # =============================================================================
 # Notifications: Automated Threat Warnings & Admin Direct Messages

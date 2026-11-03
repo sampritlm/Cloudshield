@@ -347,6 +347,7 @@ To resolve these foundational challenges, we introduce <strong>CloudShield</stro
   <li><strong>Mathematical Multi-Vector Correlation Engine:</strong> A formalized detection engine incorporating slotted temporal sliding windows, dynamic rule weight summation, multi-signal bonus escalation, and bounded mathematical normalization to eliminate false-positive triage spikes.</li>
   <li><strong>First-Class CanIPhish API v3 Integration:</strong> A complete social engineering correlation subsystem integrating live REST API v3 telemetry, HMAC-verified webhooks, an email lure threat catalog, and simulated credential-harvesting landing pages with live SOC incident tracking.</li>
   <li><strong>Cryptographically Idempotent Incident Lifecycles:</strong> An automated triage finite state machine featuring SHA-256 deduplication, immutable audit trail histories, role-based access control (RBAC), and automated active remediation countermeasures (session invalidation and account lockout).</li>
+  <li><strong>Integrated Deception Honeypot Deflection:</strong> An active deception defense subsystem planting high-interaction decoy assets (canary IAM credentials, fake database vaults, and deceptive route traps) with zero false-positive rate. Unauthorized access directly deflects malicious actors to an isolated decoy sandbox while alerting the real SOC with automated incident ticket generation.</li>
 </ul>
 
 <!-- SECTION 2 -->
@@ -557,6 +558,14 @@ The detection engine evaluates five foundational infrastructure attack indicator
   <span class="formula-label">(7)</span>
 </div>
 
+<p class="no-indent">
+<strong>Rule 6 &mdash; Honeypot Deception Trap (R<sub>6</sub>):</strong> When an adversary or automated crawler interacts with deceptive decoys, canary assets, or planted honey credentials, zero false-positive active defense triggers immediate containment:
+</p>
+<div class="formula-box">
+  <i>1<sub>R6</sub> = &Iopf;( e.resource &isin; D<sub>decoy</sub> &or; e.user = u<sub>honey</sub> ), &nbsp;&nbsp;&nbsp;&nbsp; Score<sub>6</sub> = w<sub>6</sub> &times; 1<sub>R6</sub>, &nbsp;&nbsp; w<sub>6</sub> = 85</i>
+  <span class="formula-label">(8)</span>
+</div>
+
 <h2>4.4 Composite Risk Score &amp; Severity Quantization</h2>
 <p class="no-indent">
 The composite risk score <i>S(e)</i> is normalized to a bounded scale <i>S &isin; [0, 100]</i>:
@@ -628,6 +637,13 @@ Severity classification partitions the risk domain into four deterministic opera
       <td>+20 pts</td>
       <td>Instantaneous</td>
       <td>&ge; 2 distinct rules triggered concurrently</td>
+    </tr>
+    <tr>
+      <td><strong>RULE_06</strong></td>
+      <td>Honeypot Deception Trap</td>
+      <td>+85 pts</td>
+      <td>Instantaneous</td>
+      <td>Decoy asset probed or canary credential authenticated</td>
     </tr>
     <tr>
       <td><strong>CANIPH_01</strong></td>

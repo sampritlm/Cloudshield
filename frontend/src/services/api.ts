@@ -10,7 +10,9 @@ import {
   ThreatSimulatorResponse,
   SystemHealthResponse,
   ReportSummary,
-  UserProfile
+  UserProfile,
+  HoneypotStatusResponse,
+  HoneypotDecoyInfo
 } from '../types';
 
 const API_BASE = import.meta.env.VITE_API_URL
@@ -194,6 +196,35 @@ export const api = {
 
   getSimulatorScenarios: async (): Promise<any[]> => {
     return request('/simulator/scenarios');
+  },
+
+  // Honeypot & Deception Technology
+  getHoneypotStatus: async (): Promise<HoneypotStatusResponse> => {
+    return request<HoneypotStatusResponse>('/honeypot/status');
+  },
+
+  getHoneypotDecoys: async (): Promise<HoneypotDecoyInfo[]> => {
+    return request<HoneypotDecoyInfo[]>('/honeypot/decoys');
+  },
+
+  triggerTestHoneypot: async (payload: {
+    decoy_id?: string;
+    source_ip?: string;
+    simulated_scanner?: string;
+    custom_endpoint?: string;
+  }): Promise<any> => {
+    return request('/honeypot/trigger-test', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  },
+
+  interactWithDecoy: async (payload: string | Record<string, any>): Promise<any> => {
+    const body = typeof payload === 'string' ? { interaction_type: payload } : payload;
+    return request('/honeypot/interact', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
   },
 
   // Reports
@@ -443,8 +474,18 @@ export const api = {
     return `${API_BASE}/user/portal/library/resources/${resourceId}/download`;
   },
 
-  downloadResourceFile: async (resourceId: string): Promise<{ success: boolean; filename?: string; threat?: any }> => {
-    const url = `${API_BASE}/user/portal/library/resources/${resourceId}/download`;
+  unlockResourceDocument: async (resourceId: string, passcode: string): Promise<any> => {
+    return request(`/user/portal/resources/${resourceId}/unlock`, {
+      method: 'POST',
+      body: JSON.stringify({ passcode }),
+    });
+  },
+
+  downloadResourceFile: async (resourceId: string, passcode?: string): Promise<{ success: boolean; filename?: string; threat?: any }> => {
+    let url = `${API_BASE}/user/portal/library/resources/${resourceId}/download`;
+    if (passcode) {
+      url += `?passcode=${encodeURIComponent(passcode)}`;
+    }
     const token = localStorage.getItem('cloudshield_token') || localStorage.getItem('token');
     const headers: Record<string, string> = {};
     if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -484,6 +525,14 @@ export const api = {
     window.URL.revokeObjectURL(downloadUrl);
 
     return { success: true, filename };
+  },
+
+  previewResourceDocument: async (resourceId: string, passcode?: string): Promise<any> => {
+    let url = `/user/portal/resources/${resourceId}/preview`;
+    if (passcode) {
+      url += `?passcode=${encodeURIComponent(passcode)}`;
+    }
+    return request(url);
   },
 
   // Notifications Management

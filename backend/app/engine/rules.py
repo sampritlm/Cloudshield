@@ -3,6 +3,8 @@ RULE_UNUSUAL_IP = "RULE_02_UNUSUAL_IP"
 RULE_UNAUTHORIZED_ACCESS = "RULE_03_UNAUTHORIZED_RESOURCE"
 RULE_HIGH_REQUEST_FREQUENCY = "RULE_04_REQUEST_BURST"
 RULE_COMBINED_ACTIVITY = "RULE_05_COMBINED_SUSPICIOUS"
+RULE_06_HONEYPOT_DECEPTION = "RULE_06_HONEYPOT_DECEPTION"
+RULE_HONEYPOT_TRIGGERED = RULE_06_HONEYPOT_DECEPTION
 
 # CanIPhish Official Simulation Rule Identifiers
 RULE_CANIPHISH_EMAIL_OPENED = "RULE_CP_EMAIL_OPENED"
@@ -38,6 +40,11 @@ RULE_METADATA = {
         "title": "Correlated Multi-Vector Threat",
         "description": "Multiple independent suspicious indicators detected within the same user/session context.",
         "category": "Advanced Persistent Threat / Compromised Account",
+    },
+    RULE_HONEYPOT_TRIGGERED: {
+        "title": "Honeypot Decoy Trap Triggered",
+        "description": "Unauthorized access, scanning, or credential abuse detected against active deception decoys or canary honeytokens.",
+        "category": "Deception Technology / Active Defense",
     },
     # CanIPhish Categories
     RULE_CANIPHISH_EMAIL_OPENED: {
@@ -186,4 +193,65 @@ CANIPHISH_PHISHING_WEBSITES = {
         "severity_penalty": 50
     }
 }
+
+# =========================================================================
+# Deception Technology / Active Honeypot Decoys Catalog
+# =========================================================================
+HONEYPOT_DECOY_CATALOG = {
+    "DECOY_ENV_FILE": {
+        "id": "DECOY_ENV_FILE",
+        "name": "Exposed Environment Configuration (.env)",
+        "endpoint": "/.env",
+        "category": "Configuration Exposure Trap",
+        "description": "Decoy root environment file containing fake DB credentials and canary keys to trap automated scanners.",
+        "risk_points": 90,
+        "threat_level": "CRITICAL"
+    },
+    "DECOY_AWS_KEYS": {
+        "id": "DECOY_AWS_KEYS",
+        "name": "Internal AWS IAM Credentials Decoy",
+        "endpoint": "/api/v1/internal/aws-keys",
+        "category": "Cloud Credential Trap",
+        "description": "High-value decoy endpoint returning canary AWS access keys (AKIA...) to detect unauthorized cloud recon.",
+        "risk_points": 95,
+        "threat_level": "CRITICAL"
+    },
+    "DECOY_DB_BACKUP": {
+        "id": "DECOY_DB_BACKUP",
+        "name": "Database Backup Archive Decoy",
+        "endpoint": "/api/v1/admin/db-backup",
+        "category": "Exfiltration Trap",
+        "description": "Decoy database dump endpoint that tracks automated directory fuzzing and crawler scraping.",
+        "risk_points": 90,
+        "threat_level": "CRITICAL"
+    },
+    "DECOY_ACTUATOR_ENV": {
+        "id": "DECOY_ACTUATOR_ENV",
+        "name": "Spring Actuator / Microservice Probe Trap",
+        "endpoint": "/actuator/env",
+        "category": "Microservice Scanner Trap",
+        "description": "Decoy microservice actuator endpoint commonly targeted by botnets and automated CVE scanners.",
+        "risk_points": 85,
+        "threat_level": "HIGH"
+    },
+    "DECOY_DEBUG_SECRETS": {
+        "id": "DECOY_DEBUG_SECRETS",
+        "name": "Debug Master Key & Secret Vault",
+        "endpoint": "/api/v1/system/debug-credentials",
+        "category": "Privilege Escalation Trap",
+        "description": "Enticing deceptive administrative diagnostic route that catches insider privilege escalation attempts.",
+        "risk_points": 90,
+        "threat_level": "CRITICAL"
+    },
+    "CANARY_TOKEN_AUTH": {
+        "id": "CANARY_TOKEN_AUTH",
+        "name": "Canary Honeytoken Identity (canary.admin@cloudshield.internal)",
+        "endpoint": "/api/auth/login",
+        "category": "Identity / Credential Abuse Trap",
+        "description": "Planted honeytoken user account. Any login attempt immediately identifies compromised credentials or brute-force.",
+        "risk_points": 95,
+        "threat_level": "CRITICAL"
+    }
+}
+
 

@@ -205,7 +205,16 @@ export const IncidentManagement: React.FC = () => {
                       </div>
                     </td>
                     <td className="py-3 px-4">
-                      <div className="font-bold text-slate-900 max-w-[170px] truncate">{inc.threat_type}</div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <div className="font-bold text-slate-900 max-w-[170px] truncate">{inc.threat_type}</div>
+                        {(inc.threat_type?.toLowerCase().includes('honeypot') ||
+                          inc.triggered_rules?.some((r: string) => r.includes('HONEYPOT')) ||
+                          inc.reasons?.some((r: string) => r.toLowerCase().includes('honeypot') || r.toLowerCase().includes('decoy'))) && (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-300">
+                            DECEPTION TRAP
+                          </span>
+                        )}
+                      </div>
                       <div className="font-mono text-[10px] text-slate-500">{inc.event_id}</div>
                     </td>
                     <td className="py-3 px-4">

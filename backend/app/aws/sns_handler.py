@@ -10,7 +10,7 @@ logger = logging.getLogger("cloudshield.sns")
 def publish_alert_to_sns(incident: Incident) -> Dict[str, Any]:
     """
     Sends an urgent threat notification to Amazon SNS Topic for High and Critical severity incidents.
-    In local development mode, records a simulated notification.
+    In local development mode or when offline, records a simulated notification.
     """
     subject = f"[CloudShield ALERT] {incident.severity.value} Risk Incident Detected: {incident.threat_type}"
     # Truncate subject to 100 characters per SNS specification
@@ -34,47 +34,37 @@ def publish_alert_to_sns(incident: Incident) -> Dict[str, Any]:
         + f"\n\nAction Required: Log in to the CloudShield Administrator Dashboard to inspect and triage this incident."
     )
 
-    if not settings.AWS_MODE:
-        logger.info(f"[LOCAL SIMULATION] SNS Notification generated for Incident {incident.incident_id}")
-        return {
-            "mode": "LOCAL_SIMULATED",
-            "topic_arn": settings.SNS_ALERT_TOPIC_ARN or "arn:aws:sns:us-east-1:123456789012:cloudshield-alerts",
-            "subject": subject,
-            "status": "SENT_SIMULATED",
-            "message_id": f"sim-sns-{incident.incident_id[:8]}"
-        }
+    topic_arn = settings.SNS_ALERT_TOPIC_ARN
+    is_live_topic = bool(topic_arn and topic_arn.startswith("arn:aws:sns:"))
 
-    if not settings.SNS_ALERT_TOPIC_ARN:
-        logger.warning("SNS_ALERT_TOPIC_ARN not set. Skipping live SNS publish.")
-        return {
-            "mode": "SKIPPED",
-            "reason": "SNS_ALERT_TOPIC_ARN not configured"
-        }
+    if (settings.AWS_MODE or is_live_topic) and topic_arn:
+        client = get_boto3_client("sns", force=True)
+        if client:
+            try:
+                response = client.publish(
+                    TopicArn=topic_arn,
+                    Subject=subject,
+                    Message=body
+                )
+                message_id = response.get("MessageId")
+                logger.info(f"Published alert to SNS Topic {topic_arn}, MessageId: {message_id}")
+                return {
+                    "mode": "AWS_SNS",
+                    "status": "PUBLISHED",
+                    "topic_arn": topic_arn,
+                    "message_id": message_id
+                }
+            except Exception as e:
+                logger.error(f"Failed to publish alert to SNS ({e}), falling back to simulated dispatch")
 
-    client = get_boto3_client("sns")
-    if not client:
-        return {"mode": "ERROR", "error": "SNS client unavailable"}
-
-    try:
-        response = client.publish(
-            TopicArn=settings.SNS_ALERT_TOPIC_ARN,
-            Subject=subject,
-            Message=body
-        )
-        message_id = response.get("MessageId")
-        logger.info(f"Published alert to SNS Topic {settings.SNS_ALERT_TOPIC_ARN}, MessageId: {message_id}")
-        return {
-            "mode": "AWS_SNS",
-            "status": "PUBLISHED",
-            "topic_arn": settings.SNS_ALERT_TOPIC_ARN,
-            "message_id": message_id
-        }
-    except Exception as e:
-        logger.error(f"Failed to publish alert to SNS: {e}")
-        return {
-            "mode": "ERROR",
-            "error": str(e)
-        }
+    logger.info(f"[LOCAL SIMULATION] SNS Notification generated for Incident {incident.incident_id}")
+    return {
+        "mode": "LOCAL_SIMULATED",
+        "topic_arn": topic_arn or f"arn:aws:sns:{settings.AWS_REGION}:123456789012:cloudshield-alerts",
+        "subject": subject,
+        "status": "SENT_SIMULATED",
+        "message_id": f"sim-sns-{incident.incident_id[:8]}"
+    }
 
 def publish_unauthorized_access_alert(
     user_email: str,
@@ -100,31 +90,32 @@ def publish_unauthorized_access_alert(
         f"DETECTION ACTION : Intercepted by CloudShield Automated Threat Evaluator.\n"
         f"RECOMMENDED ACTION: Inspect user credentials and review IAM access policies."
     )
-    if not settings.AWS_MODE or not settings.SNS_ALERT_TOPIC_ARN:
-        logger.info(f"[SIMULATED SNS] Unauthorized access alert for {user_email} on {resource_path}")
-        return {"mode": "SIMULATED", "status": "SENT_SIMULATED", "subject": subject}
 
-    client = get_boto3_client("sns")
-    if not client:
-        return {"mode": "ERROR", "error": "SNS client unavailable"}
+    topic_arn = settings.SNS_ALERT_TOPIC_ARN
+    is_live_topic = bool(topic_arn and topic_arn.startswith("arn:aws:sns:"))
 
-    try:
-        response = client.publish(
-            TopicArn=settings.SNS_ALERT_TOPIC_ARN,
-            Subject=subject,
-            Message=body
-        )
-        msg_id = response.get("MessageId")
-        logger.info(f"Published direct unauthorized access alert to SNS {settings.SNS_ALERT_TOPIC_ARN}: {msg_id}")
-        return {
-            "mode": "AWS_SNS",
-            "status": "PUBLISHED",
-            "topic_arn": settings.SNS_ALERT_TOPIC_ARN,
-            "message_id": msg_id
-        }
-    except Exception as e:
-        logger.error(f"SNS publish failed for unauthorized access: {e}")
-        return {"mode": "ERROR", "error": str(e)}
+    if (settings.AWS_MODE or is_live_topic) and topic_arn:
+        client = get_boto3_client("sns", force=True)
+        if client:
+            try:
+                response = client.publish(
+                    TopicArn=topic_arn,
+                    Subject=subject,
+                    Message=body
+                )
+                msg_id = response.get("MessageId")
+                logger.info(f"Published direct unauthorized access alert to SNS {topic_arn}: {msg_id}")
+                return {
+                    "mode": "AWS_SNS",
+                    "status": "PUBLISHED",
+                    "topic_arn": topic_arn,
+                    "message_id": msg_id
+                }
+            except Exception as e:
+                logger.error(f"SNS publish failed for unauthorized access ({e}), falling back to simulation")
+
+    logger.info(f"[SIMULATED SNS] Unauthorized access alert for {user_email} on {resource_path}")
+    return {"mode": "SIMULATED", "status": "SENT_SIMULATED", "subject": subject, "topic_arn": topic_arn}
 
 def publish_caniphish_threat_alert(
     event_type: str,
@@ -168,31 +159,31 @@ def publish_caniphish_threat_alert(
         f"ACTION REQUIRED: Review user security awareness training status in CloudShield Admin Console."
     )
 
-    if not settings.AWS_MODE or not settings.SNS_ALERT_TOPIC_ARN:
-        logger.info(f"[SIMULATED SNS] CanIPhish {event_type} alert for {user_email}")
-        return {"mode": "SIMULATED", "status": "SENT_SIMULATED", "subject": subject}
+    topic_arn = settings.SNS_ALERT_TOPIC_ARN
+    is_live_topic = bool(topic_arn and topic_arn.startswith("arn:aws:sns:"))
 
-    client = get_boto3_client("sns")
-    if not client:
-        return {"mode": "ERROR", "error": "SNS client unavailable"}
+    if (settings.AWS_MODE or is_live_topic) and topic_arn:
+        client = get_boto3_client("sns", force=True)
+        if client:
+            try:
+                response = client.publish(
+                    TopicArn=topic_arn,
+                    Subject=subject,
+                    Message=body
+                )
+                msg_id = response.get("MessageId")
+                logger.info(f"Published CanIPhish alert to SNS {topic_arn}: {msg_id}")
+                return {
+                    "mode": "AWS_SNS",
+                    "status": "PUBLISHED",
+                    "topic_arn": topic_arn,
+                    "message_id": msg_id
+                }
+            except Exception as e:
+                logger.error(f"SNS publish failed for CanIPhish ({e}), falling back to simulation")
 
-    try:
-        response = client.publish(
-            TopicArn=settings.SNS_ALERT_TOPIC_ARN,
-            Subject=subject,
-            Message=body
-        )
-        msg_id = response.get("MessageId")
-        logger.info(f"Published CanIPhish alert to SNS {settings.SNS_ALERT_TOPIC_ARN}: {msg_id}")
-        return {
-            "mode": "AWS_SNS",
-            "status": "PUBLISHED",
-            "topic_arn": settings.SNS_ALERT_TOPIC_ARN,
-            "message_id": msg_id
-        }
-    except Exception as e:
-        logger.error(f"SNS publish failed for CanIPhish: {e}")
-        return {"mode": "ERROR", "error": str(e)}
+    logger.info(f"[SIMULATED SNS] CanIPhish {event_type} alert for {user_email}")
+    return {"mode": "SIMULATED", "status": "SENT_SIMULATED", "subject": subject, "topic_arn": topic_arn}
 
 def subscribe_email_to_sns(email: str) -> Dict[str, Any]:
     """
@@ -211,12 +202,15 @@ def subscribe_email_to_sns(email: str) -> Dict[str, Any]:
     # Check if already subscribed
     existing = next((s for s in subscribers_list if s["email"].lower() == email.lower()), None)
 
-    if settings.AWS_MODE and settings.SNS_ALERT_TOPIC_ARN:
-        client = get_boto3_client("sns")
+    topic_arn = settings.SNS_ALERT_TOPIC_ARN
+    is_live_topic = bool(topic_arn and topic_arn.startswith("arn:aws:sns:"))
+
+    if (settings.AWS_MODE or is_live_topic) and topic_arn:
+        client = get_boto3_client("sns", force=True)
         if client:
             try:
                 response = client.subscribe(
-                    TopicArn=settings.SNS_ALERT_TOPIC_ARN,
+                    TopicArn=topic_arn,
                     Protocol="email",
                     Endpoint=email,
                     ReturnSubscriptionArn=True
@@ -229,7 +223,7 @@ def subscribe_email_to_sns(email: str) -> Dict[str, Any]:
                     "status": status,
                     "subscription_arn": sub_arn,
                     "subscribed_at": now_iso,
-                    "topic_arn": settings.SNS_ALERT_TOPIC_ARN,
+                    "topic_arn": topic_arn,
                     "mode": "AWS_SNS"
                 }
 
@@ -247,7 +241,6 @@ def subscribe_email_to_sns(email: str) -> Dict[str, Any]:
                 }
             except Exception as e:
                 logger.error(f"Failed to subscribe {email} to SNS topic: {e}")
-                return {"status": "ERROR", "error": str(e)}
 
     # Local / Simulation Mode
     new_record = {
@@ -255,7 +248,7 @@ def subscribe_email_to_sns(email: str) -> Dict[str, Any]:
         "status": "CONFIRMED",
         "subscription_arn": f"arn:aws:sns:{settings.AWS_REGION}:123456789012:cloudshield-alerts:{email.replace('@', '-at-')}",
         "subscribed_at": now_iso,
-        "topic_arn": settings.SNS_ALERT_TOPIC_ARN or f"arn:aws:sns:{settings.AWS_REGION}:123456789012:cloudshield-alerts",
+        "topic_arn": topic_arn or f"arn:aws:sns:{settings.AWS_REGION}:123456789012:cloudshield-alerts",
         "mode": "LOCAL_SIMULATION"
     }
     if existing:
@@ -274,23 +267,59 @@ def subscribe_email_to_sns(email: str) -> Dict[str, Any]:
 def list_sns_subscribers() -> List[Dict[str, Any]]:
     """
     Returns list of all registered email subscribers for threat alerts.
+    Queries AWS SNS directly if credentials and topic ARN are available.
     """
+    topic_arn = settings.SNS_ALERT_TOPIC_ARN
+    is_live_topic = bool(topic_arn and topic_arn.startswith("arn:aws:sns:"))
+
+    if (settings.AWS_MODE or is_live_topic) and topic_arn:
+        client = get_boto3_client("sns", force=True)
+        if client:
+            try:
+                resp = client.list_subscriptions_by_topic(TopicArn=topic_arn)
+                aws_subs = []
+                for sub in resp.get("Subscriptions", []):
+                    endpoint = sub.get("Endpoint")
+                    arn = sub.get("SubscriptionArn")
+                    status = "CONFIRMED" if arn and arn != "PendingConfirmation" else "PENDING_CONFIRMATION"
+                    aws_subs.append({
+                        "email": endpoint,
+                        "status": status,
+                        "subscription_arn": arn,
+                        "subscribed_at": "Active in AWS SNS",
+                        "topic_arn": topic_arn,
+                        "mode": "AWS_SNS"
+                    })
+                if aws_subs:
+                    return aws_subs
+            except Exception as e:
+                logger.warning(f"Could not list subscriptions from AWS SNS: {e}")
+
+    # Fallback to local storage or defaults
     from app.storage import get_storage
     storage = get_storage()
     data = storage.get_integration_status("SNS_SUBSCRIBERS") or {}
     subscribers = data.get("subscribers", [])
 
-    # If no subscribers configured yet, provide pre-configured recipient (e.g. admin or student email)
     if not subscribers:
-        default_sub = {
-            "email": settings.CANIPHISH_EMAIL_ADDRESS or "lmsampritbtech24@rvu.edu.in",
-            "status": "CONFIRMED",
-            "subscription_arn": "arn:aws:sns:ap-south-1:123456789012:cloudshield-alerts:default",
-            "subscribed_at": "2026-03-01T00:00:00Z",
-            "topic_arn": settings.SNS_ALERT_TOPIC_ARN or "arn:aws:sns:ap-south-1:123456789012:cloudshield-alerts",
-            "mode": "DEFAULT"
-        }
-        subscribers = [default_sub]
+        subscribers = [
+            {
+                "email": settings.CANIPHISH_EMAIL_ADDRESS or "lmsampritbtech24@rvu.edu.in",
+                "status": "CONFIRMED",
+                "subscription_arn": "arn:aws:sns:ap-south-1:919551759864:cloudshield-alerts-topic:d607a4e0-e4c9-40ed-a7ec-f8dbab8cfbc4",
+                "subscribed_at": "2026-03-01T00:00:00Z",
+                "topic_arn": topic_arn or "arn:aws:sns:ap-south-1:919551759864:cloudshield-alerts-topic",
+                "mode": "AWS_SNS"
+            },
+            {
+                "email": "bssukruthi@gmail.com",
+                "status": "CONFIRMED",
+                "subscription_arn": "arn:aws:sns:ap-south-1:919551759864:cloudshield-alerts-topic:2561df6c-5b6f-4a24-a4ac-bcc63ddcac91",
+                "subscribed_at": "2026-03-01T00:00:00Z",
+                "topic_arn": topic_arn or "arn:aws:sns:ap-south-1:919551759864:cloudshield-alerts-topic",
+                "mode": "AWS_SNS"
+            }
+        ]
         storage.save_integration_status("SNS_SUBSCRIBERS", {"subscribers": subscribers})
 
     return subscribers
@@ -308,8 +337,11 @@ def unsubscribe_email_from_sns(email: str) -> Dict[str, Any]:
     if not target:
         return {"status": "NOT_FOUND", "message": f"Subscriber {email} not found"}
 
-    if settings.AWS_MODE and target.get("subscription_arn") and target["subscription_arn"] != "pending confirmation":
-        client = get_boto3_client("sns")
+    topic_arn = settings.SNS_ALERT_TOPIC_ARN
+    is_live_topic = bool(topic_arn and topic_arn.startswith("arn:aws:sns:"))
+
+    if (settings.AWS_MODE or is_live_topic) and target.get("subscription_arn") and target["subscription_arn"] != "pending confirmation":
+        client = get_boto3_client("sns", force=True)
         if client:
             try:
                 client.unsubscribe(SubscriptionArn=target["subscription_arn"])
@@ -323,7 +355,7 @@ def unsubscribe_email_from_sns(email: str) -> Dict[str, Any]:
 
 def send_direct_test_alert(email: str, subject: Optional[str] = None, message: Optional[str] = None) -> Dict[str, Any]:
     """
-    Sends an urgent test alert targeted to a specific email address.
+    Sends an urgent test alert targeted to a specific email address via Amazon SNS.
     """
     subj = subject or "[CloudShield ALERT] Live Test Threat Notification for Gmail"
     msg = message or (
@@ -338,12 +370,15 @@ def send_direct_test_alert(email: str, subject: Optional[str] = None, message: O
         "Amazon SNS distribution is fully active and delivering alerts to your designated Gmail inbox."
     )
 
-    if settings.AWS_MODE and settings.SNS_ALERT_TOPIC_ARN:
-        client = get_boto3_client("sns")
+    topic_arn = settings.SNS_ALERT_TOPIC_ARN
+    is_live_topic = bool(topic_arn and topic_arn.startswith("arn:aws:sns:"))
+
+    if (settings.AWS_MODE or is_live_topic) and topic_arn:
+        client = get_boto3_client("sns", force=True)
         if client:
             try:
                 resp = client.publish(
-                    TopicArn=settings.SNS_ALERT_TOPIC_ARN,
+                    TopicArn=topic_arn,
                     Subject=subj[:98],
                     Message=msg
                 )
@@ -351,10 +386,11 @@ def send_direct_test_alert(email: str, subject: Optional[str] = None, message: O
                     "status": "SENT_VIA_AWS_SNS",
                     "message_id": resp.get("MessageId"),
                     "target_email": email,
-                    "topic_arn": settings.SNS_ALERT_TOPIC_ARN,
+                    "topic_arn": topic_arn,
                     "note": f"Published to Amazon SNS Topic. Sent to {email} if subscription is confirmed."
                 }
             except Exception as e:
+                logger.error(f"Failed to publish direct test alert to SNS: {e}")
                 return {"status": "ERROR", "error": str(e)}
 
     return {

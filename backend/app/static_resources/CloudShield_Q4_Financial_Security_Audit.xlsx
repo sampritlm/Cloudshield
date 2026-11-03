@@ -1,0 +1,7 @@
+Department,Q4_Cloud_Budget,PCI_DSS_Score,Unpatched_Nodes,Open_Ports,Risk_Rating,Status,Lead_Auditor
+Cloud Infrastructure,$142000,98.5%,0,None,LOW,COMPLIANT,PwC Cybersecurity Practice
+Core FinTech API,$285000,94.2%,1,Port 443,LOW,COMPLIANT,PwC Cybersecurity Practice
+Customer Data Vault,$95000,88.0%,3 (10.0.4.15),Port 22/5432,HIGH,REMEDIATION REQUIRED,PwC Cybersecurity Practice
+Corporate Identity & IAM,$62000,99.1%,0,None,LOW,COMPLIANT,PwC Cybersecurity Practice
+Data Engineering,$118000,82.4%,5 (10.0.4.22),Port 8080/3389,CRITICAL,HIGH RISK AUDIT,PwC Cybersecurity Practice
+Internal SecOps Tools,$48000,99.8%,0,None,LOW,COMPLIANT,PwC Cybersecurity Practice

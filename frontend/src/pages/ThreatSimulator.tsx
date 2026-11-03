@@ -13,7 +13,8 @@ import {
   Radio,
   FileCode,
   ShieldCheck,
-  Fish
+  Fish,
+  Target
 } from 'lucide-react';
 import { api } from '../services/api';
 import {
@@ -103,6 +104,20 @@ export const ThreatSimulator: React.FC<{ onNavigateToEvents?: () => void; onNavi
         user: 'compromised.admin@corp.internal',
         ip: '185.220.101.5',
         resource: '/admin/secrets',
+      },
+    },
+    {
+      id: 'HONEYPOT_TRIGGERED' as SimulatorScenario,
+      title: '6. Honeypot Decoy Trap',
+      badge: 'Deception (0% FP)',
+      icon: Target,
+      severityHint: 'CRITICAL (90 pts)',
+      description:
+        'Simulates an attacker or automated scanner probing deception assets (e.g. /.env or /api/v1/internal/aws-keys). Zero legitimate business purpose; triggers instant CRITICAL incident and forensic capture.',
+      defaultParams: {
+        user: 'scanner.recon@darknet-probe.io',
+        ip: '198.51.100.77',
+        resource: '/api/v1/internal/aws-keys',
       },
     },
   ];

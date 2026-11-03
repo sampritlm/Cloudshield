@@ -15,6 +15,7 @@ from app.engine.rules import (
     RULE_UNAUTHORIZED_ACCESS,
     RULE_HIGH_REQUEST_FREQUENCY,
     RULE_COMBINED_ACTIVITY,
+    RULE_HONEYPOT_TRIGGERED,
     RULE_CANIPHISH_EMAIL_OPENED,
     RULE_CANIPHISH_PAYLOAD_CLICKED,
     RULE_CANIPHISH_WEBSITE_VISITED,
@@ -495,6 +496,41 @@ class ThreatDetectionEngine:
             )
             reasons.append(
                 f"Combined suspicious activity: Multi-vector correlation triggered bonus risk escalation."
+            )
+
+        # Rule 6: Honeypot Decoy Trap / Honeytoken Triggered (Deception Technology)
+        trap_email = getattr(self.cfg, "HONEYPOT_TRAP_EMAIL", "admin-trap@cloudshield.internal")
+        is_honeypot_event = (
+            event.event_type in ["HONEYPOT_TRIGGER", "HONEYPOT_TRIGGERED", "HONEYPOT_TRAP", "HONEYTOKEN_TRIGGERED", "HONEYPOT_INTERACTION"]
+            or "honeypot" in (event.action or "").lower()
+            or "honeytoken" in (event.action or "").lower()
+            or (event.test_user and event.test_user.lower() == trap_email.lower())
+            or any(dp.lower() in (event.resource or "").lower() for dp in getattr(self.cfg, "HONEYPOT_DECOY_PATHS", []))
+            or bool(event.raw_payload and event.raw_payload.get("is_honeypot"))
+            or (event.test_user and event.test_user.lower() in [h.lower() for h in getattr(self.cfg, "HONEYTOKEN_ACCOUNTS", [])])
+        )
+
+        if is_honeypot_event:
+            decoy_target = event.resource or "/admin/secrets/decoy-master-access"
+            trap_points = getattr(self.cfg, "POINTS_HONEYPOT_TRIGGER", 85)
+            rules_triggered.append(
+                RuleTriggerResult(
+                    rule_name=RULE_METADATA[RULE_HONEYPOT_TRIGGERED]["title"],
+                    rule_code=RULE_HONEYPOT_TRIGGERED,
+                    description=f"Honeypot Deception Trap Triggered: Attacker authenticated using honey credentials '{event.test_user}' or probed deception asset '{decoy_target}'.",
+                    points=trap_points,
+                    details={
+                        "decoy_resource": decoy_target,
+                        "source_ip": event.source_ip,
+                        "actor": event.test_user,
+                        "action": event.action,
+                        "deception_technology": True,
+                        "isolated_in_sandbox": True
+                    }
+                )
+            )
+            reasons.append(
+                f"Honeypot Deception Trap Triggered: Attacker authenticated using honey credentials '{event.test_user}'. Isolated in decoy dashboard."
             )
 
         raw_score = sum(r.points for r in rules_triggered)

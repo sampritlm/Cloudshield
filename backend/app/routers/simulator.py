@@ -91,6 +91,23 @@ SCENARIO_CONFIGS = {
             "exfiltration_flag": True,
             "simulation_scenario": "Combined Suspicious Activity"
         }
+    },
+    SimulatorScenario.HONEYPOT_TRIGGERED: {
+        "title": "Honeypot Decoy Trap Triggered (Deception Technology)",
+        "description": "Simulates an attacker or automated scanner probing realistic decoy assets (e.g. /.env, /api/v1/internal/aws-keys, or canary tokens) with 0% false positives.",
+        "default_user": "recon.scanner@darknet-probe.io",
+        "default_ip": "198.51.100.77",
+        "default_resource": "/api/v1/internal/aws-keys",
+        "action": "honeypot_trap_accessed",
+        "event_type": "HONEYPOT_TRIGGERED",
+        "request_count": 1,
+        "payload": {
+            "decoy_target": "/api/v1/internal/aws-keys",
+            "probe_type": "Canary IAM Credential Extraction",
+            "scanner_signature": "AutoDirBuster/v3.4",
+            "is_honeypot": True,
+            "simulation_scenario": "Honeypot Decoy Trap Triggered"
+        }
     }
 }
 

@@ -20,7 +20,8 @@ from app.routers import (
     users,
     alerts,
     settings_mgmt,
-    user_portal
+    user_portal,
+    honeypot
 )
 
 logging.basicConfig(
@@ -69,6 +70,7 @@ app.include_router(users.router)
 app.include_router(alerts.router)
 app.include_router(settings_mgmt.router)
 app.include_router(user_portal.router)
+app.include_router(honeypot.router)
 
 @app.get("/")
 async def root():

@@ -15,7 +15,8 @@ import {
   User,
   Shield,
   ShieldAlert,
-  FolderDown
+  FolderDown,
+  Target
 } from 'lucide-react';
 
 export type NavTab =
@@ -31,6 +32,7 @@ export type NavTab =
   | 'users'
   | 'settings'
   | 'simulator'
+  | 'honeypot'
   // Normal user tabs (Final 5-page structure)
   | 'user-dashboard'
   | 'user-resources'
@@ -123,8 +125,15 @@ export const Sidebar: React.FC<Props> = ({
       id: 'simulator' as NavTab,
       label: 'Detection Testbed',
       icon: Zap,
-      badge: '5 Vectors',
+      badge: '6 Vectors',
       badgeColor: 'bg-amber-500/20 text-amber-300 border border-amber-500/30',
+    },
+    {
+      id: 'honeypot' as NavTab,
+      label: 'Honeypot Monitor',
+      icon: Target,
+      badge: 'Deception',
+      badgeColor: 'bg-purple-500/20 text-purple-300 border border-purple-500/30',
     },
   ];
 
